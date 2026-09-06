@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+* {
+  border-color: #e5e9e4;
+}
+html {
+  background: #f6f7f4;
+}
+body {
+  margin: 0;
+  color: #15201d;
+  background: #f6f7f4;
+  -webkit-font-smoothing: antialiased;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+::selection {
+  background: #c6eadc;
+  color: #123f34;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.grid-fade {
+  background-image:
+    linear-gradient(rgba(20, 125, 100, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 125, 100, 0.045) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.skeleton {
+  background: linear-gradient(90deg, #edf0ec 25%, #f7f8f6 50%, #edf0ec 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
