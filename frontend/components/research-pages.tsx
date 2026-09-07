@@ -8,11 +8,14 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  CircleAlert,
   Clock3,
+  ExternalLink,
   FileJson,
   FileSpreadsheet,
   Globe2,
   Layers3,
+  Loader2,
   Plus,
   Search,
   ShieldCheck,
@@ -23,6 +26,13 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { businesses, nicheRows, nicheSlug } from '@/lib/demo-data';
 import { Button, Card, PageHeader, ScoreRing, SectionTitle } from './ui';
+import { useMarkets } from './market-provider';
+import { useNotifications } from './notification-provider';
+import {
+  demoMode,
+  runLiveResearch,
+  type LiveResearchResponse,
+} from '@/lib/api';
 
 export function NichesPage() {
   const [query, setQuery] = useState('');
@@ -384,22 +394,69 @@ function AuditScore({
 }
 
 export function ResearchPage() {
+  const { activeMarket } = useMarkets();
+  const { notify } = useNotifications();
   const [step, setStep] = useState(1);
-  const [area, setArea] = useState('All San Jose');
+  const [areaSelection, setAreaSelection] = useState({
+    marketId: activeMarket.id,
+    value: `All ${activeMarket.city}`,
+  });
   const [niche, setNiche] = useState('HVAC');
-  const [source, setSource] = useState<'manual' | 'csv' | 'json'>('manual');
+  const [industry, setIndustry] = useState('Home Services');
+  const [source, setSource] = useState<'live' | 'manual' | 'csv' | 'json'>('live');
   const [running, setRunning] = useState(false);
-  const sourceTypes: Array<['manual' | 'csv' | 'json', string, LucideIcon]> = [
+  const [resultLimit, setResultLimit] = useState(10);
+  const [liveResults, setLiveResults] = useState<LiveResearchResponse | null>(null);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const sourceTypes: Array<['live' | 'manual' | 'csv' | 'json', string, LucideIcon]> = [
+    ['live', 'Live web', Globe2],
     ['manual', 'Manual', Plus],
     ['csv', 'CSV', FileSpreadsheet],
     ['json', 'JSON', FileJson],
   ];
+  const area =
+    areaSelection.marketId === activeMarket.id
+      ? areaSelection.value
+      : `All ${activeMarket.city}`;
   const start = () => {
     setRunning(true);
     setTimeout(() => {
       setRunning(false);
       setStep(3);
+      notify({
+        title: `${activeMarket.city} research run created`,
+        detail: `${niche} research is ready for public business data.`,
+        href: '/research',
+      });
     }, 1000);
+  };
+  const searchLive = async () => {
+    setRunning(true);
+    setLiveError(null);
+    setLiveResults(null);
+    try {
+      const results = await runLiveResearch({
+        market: {
+          city: activeMarket.city,
+          region: activeMarket.region,
+          country: activeMarket.country,
+          ...(area.startsWith('All ') ? {} : { area }),
+        },
+        industry,
+        niche,
+        limit: resultLimit,
+      });
+      setLiveResults(results);
+      notify({
+        title: `${results.businesses.length} live candidates found`,
+        detail: `${niche} search completed for ${activeMarket.city}. Review citations before importing.`,
+        href: '/research',
+      });
+    } catch (error) {
+      setLiveError(error instanceof Error ? error.message : 'Live search failed');
+    } finally {
+      setRunning(false);
+    }
   };
   return (
     <>
@@ -441,23 +498,34 @@ export function ResearchPage() {
               </p>
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 <FieldLabel label="Research name">
-                  <input defaultValue="San Jose HVAC Research" />
+                  <input
+                    key={`${activeMarket.id}-${niche}-name`}
+                    aria-label="Research name"
+                    defaultValue={`${activeMarket.city} ${niche} Research`}
+                  />
                 </FieldLabel>
                 <FieldLabel label="Location">
-                  <input defaultValue="San Jose, California, USA" />
+                  <input
+                    key={`${activeMarket.id}-location`}
+                    aria-label="Research location"
+                    defaultValue={`${activeMarket.city}, ${activeMarket.region}, ${activeMarket.country}`}
+                  />
                 </FieldLabel>
                 <FieldLabel label="Area">
-                  <select value={area} onChange={(e) => setArea(e.target.value)}>
-                    <option>All San Jose</option>
-                    <option>Downtown San Jose</option>
-                    <option>North San Jose</option>
-                    <option>South San Jose</option>
-                    <option>East San Jose</option>
-                    <option>West San Jose</option>
+                  <select
+                    value={area}
+                    onChange={(e) =>
+                      setAreaSelection({ marketId: activeMarket.id, value: e.target.value })
+                    }
+                  >
+                    <option>{`All ${activeMarket.city}`}</option>
+                    {activeMarket.areas.map((marketArea) => (
+                      <option key={marketArea}>{marketArea}</option>
+                    ))}
                   </select>
                 </FieldLabel>
                 <FieldLabel label="Industry">
-                  <select>
+                  <select value={industry} onChange={(event) => setIndustry(event.target.value)}>
                     <option>Home Services</option>
                     <option>Healthcare</option>
                     <option>Legal & Professional</option>
@@ -488,9 +556,10 @@ export function ResearchPage() {
             <div className="p-6">
               <h2 className="text-base font-bold">Add public business data</h2>
               <p className="mt-1 text-[11px] text-slate-500">
-                Choose a manual entry or import a permitted dataset. Every record needs a source.
+                Search the live web through the configured backend provider, or import permitted
+                data. Every result must retain a source.
               </p>
-              <div className="mt-5 grid grid-cols-3 gap-2">
+              <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {sourceTypes.map(([key, label, Icon]) => (
                   <button
                     key={String(key)}
@@ -502,7 +571,58 @@ export function ResearchPage() {
                   </button>
                 ))}
               </div>
-              {source === 'manual' ? (
+              {source === 'live' ? (
+                <div className="mt-5">
+                  <div className="rounded-xl border bg-slate-50/60 p-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                      <div className="flex-1">
+                        <p className="text-xs font-bold">Live business discovery</p>
+                        <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                          Searches {niche} businesses in {area}, {activeMarket.region},{' '}
+                          {activeMarket.country}. Results remain unverified until their citations
+                          are reviewed.
+                        </p>
+                      </div>
+                      <label>
+                        <span className="mb-1.5 block text-[9px] font-bold uppercase text-slate-400">
+                          Result limit
+                        </span>
+                        <select
+                          aria-label="Live result limit"
+                          value={resultLimit}
+                          onChange={(event) => setResultLimit(Number(event.target.value))}
+                          className="h-10 rounded-xl border bg-white px-3 text-xs"
+                        >
+                          <option value={5}>5</option>
+                          <option value={10}>10</option>
+                          <option value={20}>20</option>
+                        </select>
+                      </label>
+                      <Button onClick={() => void searchLive()} disabled={running}>
+                        {running ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
+                        {running ? 'Searching live web…' : 'Search live data'}
+                      </Button>
+                    </div>
+                  </div>
+                  {demoMode && (
+                    <div className="mt-3 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[10px] leading-4 text-amber-800">
+                      <CircleAlert size={14} className="mt-0.5 shrink-0" />
+                      <span>
+                        Live search requires <code>NEXT_PUBLIC_DEMO_MODE=false</code>, a connected
+                        backend, MongoDB, and a server-side <code>XAI_API_KEY</code>.
+                      </span>
+                    </div>
+                  )}
+                  {liveError && (
+                    <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                      {liveError}
+                    </div>
+                  )}
+                  {liveResults && (
+                    <LiveResults results={liveResults} />
+                  )}
+                </div>
+              ) : source === 'manual' ? (
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <FieldLabel label="Business name">
                     <input placeholder="Business name" />
@@ -534,12 +654,12 @@ export function ResearchPage() {
                 </label>
               )}
               <div className="mt-6 flex justify-between">
-                <Button variant="secondary" onClick={() => setStep(1)}>
-                  Back
-                </Button>
-                <Button onClick={start} disabled={running}>
-                  {running ? 'Validating data…' : 'Create research run'} <ArrowRight size={14} />
-                </Button>
+                <Button variant="secondary" onClick={() => setStep(1)}>Back</Button>
+                {source !== 'live' && (
+                  <Button onClick={start} disabled={running}>
+                    {running ? 'Validating data…' : 'Create research run'} <ArrowRight size={14} />
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -550,8 +670,8 @@ export function ResearchPage() {
               </span>
               <h2 className="mt-5 text-lg font-bold">Research run created</h2>
               <p className="mx-auto mt-2 max-w-md text-xs leading-5 text-slate-500">
-                San Jose {niche} is ready. Add verified public records manually or connect an
-                approved API provider later.
+                {activeMarket.city} {niche} is ready. Add verified public records manually or
+                connect an approved API provider later.
               </p>
               <div className="mx-auto mt-5 max-w-sm rounded-xl border p-4 text-left">
                 <div className="flex justify-between text-[11px]">
@@ -595,6 +715,7 @@ export function ResearchPage() {
             <SectionTitle title="Recent runs" />
             <div className="mt-4 space-y-3">
               {[
+                [`${activeMarket.city} ${niche}`, 'Pending', '0 / 0'],
                 ['San Jose HVAC', 'Completed', '4 / 4'],
                 ['Dentists — Downtown', 'Running', '3 / 8'],
                 ['Home Services Q3', 'Pending', '0 / 20'],
@@ -619,15 +740,91 @@ export function ResearchPage() {
             </p>
             <div className="mt-3 rounded-xl border border-dashed p-4 text-center">
               <Globe2 className="mx-auto text-slate-300" />
-              <p className="mt-2 text-[11px] font-bold">No provider connected</p>
+              <p className="mt-2 text-[11px] font-bold">
+                {demoMode ? 'Live provider not active' : 'Grok web search through backend'}
+              </p>
               <p className="mt-1 text-[10px] text-slate-400">
-                Google Places, Yelp Fusion, and PageSpeed can be added from Settings.
+                {demoMode
+                  ? 'Disable demo mode and configure XAI_API_KEY on the backend.'
+                  : 'Every candidate must include public citation URLs before review.'}
               </p>
             </div>
           </Card>
         </div>
       </div>
     </>
+  );
+}
+
+function LiveResults({ results }: { results: LiveResearchResponse }) {
+  return (
+    <div className="mt-4 overflow-hidden rounded-xl border">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-white px-4 py-3">
+        <div>
+          <p className="text-xs font-bold">{results.businesses.length} candidates discovered</p>
+          <p className="mt-0.5 text-[9px] text-slate-400">
+            {results.provider} · {new Date(results.searchedAt).toLocaleString()}
+          </p>
+        </div>
+        <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[9px] font-bold text-amber-700">
+          Review required
+        </span>
+      </div>
+      {results.businesses.length ? (
+        <div className="divide-y bg-white">
+          {results.businesses.map((business, index) => (
+            <div key={`${business.name}-${index}`} className="p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold text-ink">{business.name}</p>
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    {business.address ?? 'Address not found'}
+                  </p>
+                </div>
+                {business.website && (
+                  <a
+                    href={business.website}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[10px] font-bold text-brand hover:underline"
+                  >
+                    Website <ExternalLink size={11} />
+                  </a>
+                )}
+              </div>
+              <p className="mt-2 text-[10px] leading-4 text-slate-600">
+                {business.evidenceSummary}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-3 text-[9px] text-slate-500">
+                <span>Phone: {business.phone ?? 'Unknown'}</span>
+                <span>Email: {business.publicEmail ?? 'Unknown'}</span>
+                <span>
+                  Google: {business.googleRating ?? 'Unknown'}
+                  {business.googleReviews !== null ? ` (${business.googleReviews} reviews)` : ''}
+                </span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {business.sourceUrls.map((url, sourceIndex) => (
+                  <a
+                    key={url}
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[9px] font-semibold text-slate-600 hover:border-brand/30 hover:text-brand"
+                  >
+                    Source {sourceIndex + 1} <ExternalLink size={10} />
+                  </a>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="bg-white p-8 text-center text-xs text-slate-500">
+          No cited candidates were found. Adjust the niche, area, or result limit and try again.
+        </p>
+      )}
+    </div>
   );
 }
 function FieldLabel({

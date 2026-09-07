@@ -166,6 +166,44 @@ export async function fetchCurrentUser() {
   return apiRequest<{ user: AuthUser }>('/auth/me');
 }
 
+export interface LiveResearchCandidate {
+  name: string;
+  address: string | null;
+  website: string | null;
+  phone: string | null;
+  publicEmail: string | null;
+  googleRating: number | null;
+  googleReviews: number | null;
+  evidenceSummary: string;
+  sourceUrls: string[];
+}
+
+export interface LiveResearchResponse {
+  provider: string;
+  model: string;
+  searchedAt: string;
+  query: { location: string };
+  businesses: LiveResearchCandidate[];
+  citations: string[];
+}
+
+export async function runLiveResearch(input: {
+  market: { city: string; region: string; country: string; area?: string };
+  industry: string;
+  niche: string;
+  limit: number;
+}) {
+  if (demoMode) {
+    throw new Error(
+      'Live search is disabled while NEXT_PUBLIC_DEMO_MODE is true. Connect the backend and disable demo mode first.',
+    );
+  }
+  return apiRequest<LiveResearchResponse>('/research/live-search', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 function readDemoUsers(): DemoUser[] {
   if (typeof window === 'undefined') return [];
   try {

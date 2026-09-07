@@ -20,6 +20,7 @@ import {
 import { businesses as initialBusinesses, type DemoBusiness } from '@/lib/demo-data';
 import { downloadCsv } from '@/lib/utils';
 import { Avatar, Button, Card, PageHeader, PriorityBadge, ScoreRing, StatusDot } from './ui';
+import { useNotifications } from './notification-provider';
 
 const exportRow = (b: DemoBusiness) => ({
   'Business Name': b.name,
@@ -45,6 +46,7 @@ const exportRow = (b: DemoBusiness) => ({
 });
 
 export function BusinessesTable() {
+  const { notify } = useNotifications();
   const [rows, setRows] = useState(initialBusinesses);
   const [query, setQuery] = useState('');
   const [industry, setIndustry] = useState('All industries');
@@ -323,6 +325,11 @@ export function BusinessesTable() {
           onAdd={(business) => {
             setRows((current) => [business, ...current]);
             setAddOpen(false);
+            notify({
+              title: `${business.name} added`,
+              detail: 'Added to the research queue just now.',
+              href: `/businesses/${business.id}`,
+            });
           }}
         />
       )}

@@ -7,6 +7,8 @@ const schema = z.object({
   MONGODB_URI: z.string().default('mongodb://localhost:27017/agency-os'),
   JWT_SECRET: z.string().min(32).default('development-only-secret-change-me-now'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  XAI_API_KEY: z.string().trim().optional(),
+  XAI_MODEL: z.string().trim().default('grok-4.6'),
 });
 
 export const env = schema.parse(process.env);

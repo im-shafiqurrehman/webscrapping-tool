@@ -32,6 +32,8 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { businesses, type Stage } from '@/lib/demo-data';
 import { downloadCsv } from '@/lib/utils';
+import { gmailComposeUrl } from '@/lib/gmail';
+import { demoMode } from '@/lib/api';
 import {
   Avatar,
   Button,
@@ -43,6 +45,7 @@ import {
   SectionTitle,
   StatusDot,
 } from './ui';
+import { useNotifications } from './notification-provider';
 
 export function ProspectsPage() {
   const [limit, setLimit] = useState(20);
@@ -221,6 +224,7 @@ const stages: Stage[] = [
   'Lost',
 ];
 export function PipelinePage() {
+  const { notify } = useNotifications();
   const [cards, setCards] = useState(businesses);
   const [drag, setDrag] = useState<string | null>(null);
   const [followupsOpen, setFollowupsOpen] = useState(false);
@@ -228,8 +232,18 @@ export function PipelinePage() {
   const followups = cards.filter((business) => ['Contacted', 'Follow Up'].includes(business.status));
   const move = (stage: Stage) => {
     if (!drag) return;
+    const movedBusiness = cards.find((business) => business.id === drag);
     setCards((c) => c.map((b) => (b.id === drag ? { ...b, status: stage } : b)));
     setDrag(null);
+    if (movedBusiness) {
+      notify({
+        title: `${movedBusiness.name} moved to ${stage}`,
+        detail: 'Pipeline status updated just now.',
+        href: movedBusiness.id.startsWith('prospect-')
+          ? `/businesses/${movedBusiness.id}`
+          : '/pipeline',
+      });
+    }
   };
   return (
     <>
@@ -402,6 +416,11 @@ export function PipelinePage() {
           onAdd={(lead) => {
             setCards((current) => [lead, ...current]);
             setAddLeadOpen(false);
+            notify({
+              title: `${lead.name} added`,
+              detail: 'New lead created in the pipeline.',
+              href: '/pipeline',
+            });
           }}
         />
       )}
@@ -519,6 +538,7 @@ function PipelineMetric({
 }
 
 export function OutreachPage() {
+  const { notify } = useNotifications();
   const [selected, setSelected] = useState(businesses[0]!.id);
   const [type, setType] = useState('Cold email');
   const [generated, setGenerated] = useState(false);
@@ -538,8 +558,12 @@ export function OutreachPage() {
       : type === 'Short DM'
         ? `Hi ${business.name}! I spotted ${business.mainOpportunity.toLowerCase()}. Happy to send a quick, no-pressure audit with 3 ideas.`
         : `Hi ${business.name} team,\n\nWhile reviewing ${business.niche.toLowerCase()} businesses in San Jose, I noticed ${business.mainOpportunity.toLowerCase()}. I put together a brief audit with three practical ideas that could help improve visibility and enquiries.\n\nWould it be useful if I sent it over?\n\nBest,\nShafiq`;
-  const mailto = business.email
-    ? `mailto:${business.email}?subject=${encodeURIComponent(`A quick idea for ${business.name}`)}&body=${encodeURIComponent(body)}`
+  const gmailUrl = business.email
+    ? gmailComposeUrl({
+        to: business.email,
+        subject: `A quick idea for ${business.name}`,
+        body,
+      })
     : null;
   const resetActions = () => {
     setGenerated(false);
@@ -554,6 +578,12 @@ export function OutreachPage() {
         title="Outreach studio"
         description="Turn verified audit findings into short, useful messages—without invented claims or generic spam."
       />
+      {demoMode && (
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
+          <strong>Demo outreach:</strong> recipients and audit claims are synthetic. Use imported,
+          verified records before sending any email.
+        </div>
+      )}
       <div className="grid gap-4 xl:grid-cols-[.8fr_1.35fr]">
         <div className="space-y-4">
           <Card className="p-5">
@@ -655,20 +685,49 @@ export function OutreachPage() {
                 </p>
               </div>
               <div className="mt-4 flex justify-end gap-2">
-                <Button variant="secondary" onClick={() => setDraftSaved(true)}>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setDraftSaved(true);
+                    notify({
+                      title: `Draft saved for ${business.name}`,
+                      detail: 'The outreach draft is ready to continue.',
+                      href: '/outreach',
+                    });
+                  }}
+                >
                   {draftSaved ? <Check size={14} /> : <FileText size={14} />}
                   {draftSaved ? 'Draft saved' : 'Save draft'}
                 </Button>
-                <Button onClick={() => setCompleted(true)} disabled={completed}>
+                <Button
+                  onClick={() => {
+                    setCompleted(true);
+                    notify({
+                      title: `Outreach completed for ${business.name}`,
+                      detail: 'The outreach task was marked complete.',
+                      href: '/outreach',
+                    });
+                  }}
+                  disabled={completed}
+                >
                   <CheckCircle2 size={14} /> {completed ? 'Completed' : 'Mark complete'}
                 </Button>
-                {mailto ? (
+                {gmailUrl ? (
                   <a
-                    href={mailto}
+                    href={gmailUrl}
+                    target="_blank"
+                    rel="noreferrer"
                     data-testid="outreach-send-email"
+                    onClick={() =>
+                      notify({
+                        title: `Email prepared for ${business.name}`,
+                        detail: 'Your email application was opened with the message.',
+                        href: '/outreach',
+                      })
+                    }
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-px hover:bg-[#26332f]"
                   >
-                    <Send size={14} /> Send email
+                    <Send size={14} /> Open in Gmail
                   </a>
                 ) : (
                   <button

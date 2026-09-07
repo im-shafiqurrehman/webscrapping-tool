@@ -163,20 +163,57 @@ try {
     await waitForText('Audit center');
   });
 
-  await test('notifications open and expose an empty state after being read', async () => {
+  await test('notifications close outside and expose an empty state after being read', async () => {
     await page.click('button[aria-label="Open notifications"]');
     await waitForText('3 unread');
+    await page.click('main');
+    await page.waitForFunction(
+      () => document.querySelector('button[aria-label="Open notifications"]')?.getAttribute('aria-expanded') === 'false',
+    );
+    await page.click('button[aria-label="Open notifications"]');
     await clickText('Mark all read');
     await waitForText('No notifications');
-    await page.click('button[aria-label="Open notifications"]');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(
+      () => document.querySelector('button[aria-label="Open notifications"]')?.getAttribute('aria-expanded') === 'false',
+    );
   });
 
   await test('workspace selector opens and links to market management', async () => {
     await page.click('button[aria-label="Select workspace"]');
     await waitForText('Current workspace');
-    const manageMarkets = await page.$('a[href="/settings"]');
+    const manageMarkets = await page.$('a[href="/settings/markets"]');
     assert.ok(manageMarkets, 'workspace menu should link to market management');
     await page.click('button[aria-label="Select workspace"]');
+  });
+
+  await test('additional markets can be added, selected, and used for research', async () => {
+    await go('/settings/markets');
+    await waitForText('Markets & locations');
+    await clickText('Add market');
+    await waitForText('Add a research market');
+    await page.select('select[aria-label="Market country"]', 'United Kingdom');
+    await page.type('input[aria-label="Market city"]', 'London');
+    await page.type('input[aria-label="Market region"]', 'Greater London');
+    await page.type('input[aria-label="Market areas"]', 'Westminster, Camden, Islington');
+    await clickText('Add and select market');
+    await waitForText('London market added');
+    await page.click('button[aria-label="Select workspace"]');
+    await waitForText('Current workspace');
+    await waitForText('United Kingdom');
+    await page.click('button[aria-label="Select London market"]');
+    await clickText('Research', 'a');
+    await page.waitForFunction(() => location.pathname === '/research');
+    const location = await page.$('input[aria-label="Research location"]');
+    assert.ok(location, 'research location should be available');
+    assert.equal(
+      await location.evaluate((element) => element.value),
+      'London, Greater London, United Kingdom',
+    );
+    const areaOptions = await page.$$eval('select', (selects) =>
+      selects.flatMap((select) => [...select.options].map((option) => option.text)),
+    );
+    assert.ok(areaOptions.includes('Westminster'), 'new market areas should be available');
   });
 
   await test('business table search, filters, export, and add flow work', async () => {
@@ -215,6 +252,8 @@ try {
     await page.type('input[placeholder="Business name"]', 'QA Verified Business');
     await clickText('Add to research queue');
     await waitForText('QA Verified Business');
+    await page.waitForSelector('[data-sonner-toast]');
+    assert.match(await bodyText(), /QA Verified Business added/);
   });
 
   await test('business profile tabs and audit save controls work', async () => {
@@ -222,6 +261,11 @@ try {
     await clickText('Northstar Heating & Air', 'a');
     await page.waitForFunction(() => location.pathname === '/businesses/prospect-1');
     await waitForText('Northstar Heating & Air');
+    await waitForText('Illustrative demo record');
+    const sourceLinks = await page.$$('a[target="_blank"]');
+    assert.ok(sourceLinks.length >= 3, 'demo website and source links should be actionable');
+    const mapsSource = await page.$('a[href^="https://www.google.com/maps/search/"]');
+    assert.ok(mapsSource, 'public business profile search should have a working URL');
     await clickText('Website Audit');
     await waitForText('Mark only what you can verify');
     await clickText('weak');
@@ -241,6 +285,9 @@ try {
     await go('/research');
     await clickText('Continue to data');
     await waitForText('Add public business data');
+    await waitForText('Live business discovery');
+    await clickText('Search live data');
+    await waitForText('Live search is disabled');
     await clickText('CSV');
     await waitForText('Drop your CSV file here');
     await clickText('Create research run');
@@ -268,10 +315,9 @@ try {
     await waitForText('Outreach task marked complete');
     const sendEmail = await page.$('[data-testid="outreach-send-email"]');
     assert.ok(sendEmail, 'send email action should be available for prospects with public email');
-    assert.match(
-      (await sendEmail.evaluate((element) => element.getAttribute('href'))) ?? '',
-      /^mailto:hello@demo-2\.example\?/,
-    );
+    const gmailHref = (await sendEmail.evaluate((element) => element.getAttribute('href'))) ?? '';
+    assert.match(gmailHref, /^https:\/\/mail\.google\.com\/mail\/\?/);
+    assert.match(gmailHref, /to=hello%40demo-2\.example/);
   });
 
   await test('pipeline supports native drag and drop between stages', async () => {
@@ -286,6 +332,10 @@ try {
     await page.type('input[aria-label="Lead email"]', 'qa-pipeline@example.com');
     await clickText('Create lead');
     await waitForText('QA Pipeline Lead');
+    await page.waitForSelector('[data-sonner-toast]');
+    await page.click('button[aria-label="Open notifications"]');
+    await waitForText('New lead created in the pipeline');
+    await page.click('main');
     const moved = await page.evaluate(async () => {
       const card = [...document.querySelectorAll('[draggable="true"]')].find((element) =>
         element.textContent?.includes('Northstar Heating & Air'),

@@ -29,6 +29,7 @@ Base URL: `/api`. Responses are JSON. Except for health, signup, and login, pass
 | POST             | `/scoring/recalculate`       | Recalculate one set or all businesses       |
 | GET              | `/prospects/top?limit=20`    | Top prospects (maximum 100)                 |
 | POST/GET         | `/research`, `/research/:id` | Create/read a research run                  |
+| POST             | `/research/live-search`      | Discover cited live candidates with Grok Web Search |
 | PATCH            | `/pipeline/:businessId`      | Update pipeline status and next action      |
 | POST             | `/outreach/generate`         | Generate a message from stored findings     |
 | GET              | `/reports/market`            | Market report using supported samples       |
@@ -48,3 +49,26 @@ List responses follow:
 ```
 
 Errors follow `{ "error": { "message": "…", "details": {} } }`. Missing information is omitted or null; it is never fabricated.
+
+## Live business discovery
+
+`POST /research/live-search` requires an Admin or Researcher token and a server-side
+`XAI_API_KEY`. Example request:
+
+```json
+{
+  "market": {
+    "city": "London",
+    "region": "Greater London",
+    "country": "United Kingdom",
+    "area": "Westminster"
+  },
+  "industry": "Home Services",
+  "niche": "Plumbing",
+  "limit": 10
+}
+```
+
+The response includes `provider`, `model`, `searchedAt`, `businesses`, and `citations`. Each
+business must contain at least one `sourceUrls` entry. These are discovery candidates and must be
+reviewed before import, scoring, or outreach.

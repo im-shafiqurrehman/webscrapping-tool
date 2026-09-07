@@ -7,15 +7,19 @@ import {
   Database,
   Globe2,
   KeyRound,
+  Mail,
   MapPin,
   Plus,
   Save,
   Shield,
   SlidersHorizontal,
   UsersRound,
+  X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button, Card, PageHeader, SectionTitle } from './ui';
+import { useNotifications } from './notification-provider';
+import { useMarkets, type NewMarket } from './market-provider';
 
 const initialWeights = {
   'Revenue & budget': 20,
@@ -26,8 +30,11 @@ const initialWeights = {
   'Ease of contact': 5,
   'Competition opportunity': 10,
 };
-export function SettingsPage() {
-  const [tab, setTab] = useState('Scoring');
+export function SettingsPage({ initialTab = 'Scoring' }: { initialTab?: string }) {
+  const { notify } = useNotifications();
+  const { activeMarket, addMarket, markets, selectMarket } = useMarkets();
+  const [tab, setTab] = useState(initialTab);
+  const [marketDialogOpen, setMarketDialogOpen] = useState(false);
   const [weights, setWeights] = useState(initialWeights);
   const [saved, setSaved] = useState(false);
   const total = useMemo(() => Object.values(weights).reduce((a, b) => a + b, 0), [weights]);
@@ -49,6 +56,11 @@ export function SettingsPage() {
             onClick={() => {
               setSaved(true);
               setTimeout(() => setSaved(false), 1600);
+              notify({
+                title: 'Settings saved',
+                detail: 'Workspace scoring settings were updated.',
+                href: '/settings',
+              });
             }}
           >
             <Save size={15} /> {saved ? 'Saved' : 'Save changes'}
@@ -159,49 +171,66 @@ export function SettingsPage() {
           )}
           {tab === 'Markets' && (
             <Card className="p-6">
-              <SectionTitle
-                title="Markets & locations"
-                subtitle="Add cities, states, countries, and service areas without changing the schema"
-              />
-              <div className="mt-5 rounded-xl border p-5">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-mint text-brand">
-                    <MapPin size={18} />
-                  </span>
-                  <div className="flex-1">
-                    <p className="text-xs font-bold">San Jose, California</p>
-                    <p className="mt-0.5 text-[9px] text-slate-400">
-                      United States · Primary market
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-bold text-brand">
-                    Active
-                  </span>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {[
-                    'Downtown',
-                    'North San Jose',
-                    'South San Jose',
-                    'East San Jose',
-                    'West San Jose',
-                  ].map((a) => (
-                    <span
-                      className="rounded-lg border px-2.5 py-1.5 text-[9px] font-semibold text-slate-600"
-                      key={a}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <SectionTitle
+                  title="Markets & locations"
+                  subtitle="Add cities, regions, countries, and service areas for research."
+                />
+                <Button variant="secondary" onClick={() => setMarketDialogOpen(true)}>
+                  <Plus size={15} /> Add market
+                </Button>
+              </div>
+              <div className="mt-5 grid gap-3 xl:grid-cols-2">
+                {markets.map((market) => {
+                  const active = market.id === activeMarket.id;
+                  return (
+                    <button
+                      key={market.id}
+                      type="button"
+                      onClick={() => selectMarket(market.id)}
+                      className={`rounded-xl border p-5 text-left transition hover:border-brand/30 ${active ? 'border-brand/40 bg-emerald-50/30 ring-1 ring-brand/10' : ''}`}
                     >
-                      {a}
-                    </span>
-                  ))}
-                </div>
+                      <span className="flex items-center gap-3">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-mint text-brand">
+                          <MapPin size={18} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-bold">
+                            {market.city}, {market.region}
+                          </span>
+                          <span className="mt-0.5 block text-[9px] text-slate-400">
+                            {market.country}
+                          </span>
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-1 text-[9px] font-bold ${active ? 'bg-emerald-50 text-brand' : 'bg-slate-100 text-slate-500'}`}
+                        >
+                          {active ? 'Active' : 'Select'}
+                        </span>
+                      </span>
+                      <span className="mt-4 flex flex-wrap gap-2">
+                        {market.areas.length ? (
+                          market.areas.map((area) => (
+                            <span
+                              className="rounded-lg border bg-white px-2.5 py-1.5 text-[9px] font-semibold text-slate-600"
+                              key={area}
+                            >
+                              {area}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[9px] text-slate-400">Entire city</span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
               <Button
-                variant="secondary"
-                disabled
-                title="Additional markets require the production market-management service"
+                onClick={() => setMarketDialogOpen(true)}
                 className="mt-4"
               >
-                <Plus size={15} /> Additional markets not configured
+                <Plus size={15} /> Add another market
               </Button>
             </Card>
           )}
@@ -212,6 +241,19 @@ export function SettingsPage() {
                 subtitle="Connect official APIs only; credentials stay server-side"
               />
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-mint text-brand">
+                    <Mail size={17} />
+                  </span>
+                  <p className="mt-3 text-xs font-bold">Gmail compose</p>
+                  <p className="mt-1 text-[9px] leading-4 text-slate-500">
+                    Opens Gmail with the verified recipient, subject, and message pre-filled.
+                    Sending still requires confirmation in Gmail.
+                  </p>
+                  <span className="mt-4 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[9px] font-bold text-brand">
+                    Enabled
+                  </span>
+                </div>
                 {[
                   ['Google Places API', 'Public business profiles and locations'],
                   ['Yelp Fusion API', 'Public listing and review signals'],
@@ -267,6 +309,124 @@ export function SettingsPage() {
           )}
         </div>
       </div>
+      {marketDialogOpen && (
+        <AddMarketDialog
+          onClose={() => setMarketDialogOpen(false)}
+          onAdd={(input) => {
+            const market = addMarket(input);
+            setMarketDialogOpen(false);
+            notify({
+              title: `${market.city} market added`,
+              detail: `${market.country} is now the active research market.`,
+              href: '/research',
+            });
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function AddMarketDialog({
+  onClose,
+  onAdd,
+}: {
+  onClose: () => void;
+  onAdd: (market: NewMarket) => void;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-market-title"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-ink/35 p-4 backdrop-blur-sm"
+    >
+      <Card className="w-full max-w-lg p-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 id="add-market-title" className="text-lg font-bold">Add a research market</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Configure a city in the USA, UK, or another supported country.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Close add market"
+            onClick={onClose}
+            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-ink"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <form
+          className="mt-6 grid gap-4 sm:grid-cols-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            const city = String(form.get('city')).trim();
+            const region = String(form.get('region')).trim();
+            const country = String(form.get('country')).trim();
+            const areas = String(form.get('areas'))
+              .split(',')
+              .map((area) => area.trim())
+              .filter(Boolean);
+            if (!city || !region || !country) return;
+            onAdd({ city, region, country, areas });
+          }}
+        >
+          <label>
+            <span className="mb-1.5 block text-[11px] font-bold text-slate-600">Country</span>
+            <select
+              name="country"
+              aria-label="Market country"
+              defaultValue="United Kingdom"
+              className="h-11 w-full rounded-xl border bg-white px-3 text-xs outline-none focus:ring-2 focus:ring-brand/15"
+            >
+              <option>United States</option>
+              <option>United Kingdom</option>
+              <option>Canada</option>
+              <option>Australia</option>
+              <option>United Arab Emirates</option>
+              <option>Pakistan</option>
+            </select>
+          </label>
+          <label>
+            <span className="mb-1.5 block text-[11px] font-bold text-slate-600">City</span>
+            <input
+              name="city"
+              required
+              aria-label="Market city"
+              placeholder="e.g. London"
+              className="h-11 w-full rounded-xl border px-3 text-xs outline-none focus:ring-2 focus:ring-brand/15"
+            />
+          </label>
+          <label className="sm:col-span-2">
+            <span className="mb-1.5 block text-[11px] font-bold text-slate-600">Region / state</span>
+            <input
+              name="region"
+              required
+              aria-label="Market region"
+              placeholder="e.g. Greater London"
+              className="h-11 w-full rounded-xl border px-3 text-xs outline-none focus:ring-2 focus:ring-brand/15"
+            />
+          </label>
+          <label className="sm:col-span-2">
+            <span className="mb-1.5 block text-[11px] font-bold text-slate-600">
+              Areas (comma separated)
+            </span>
+            <input
+              name="areas"
+              aria-label="Market areas"
+              placeholder="Westminster, Camden, Islington"
+              className="h-11 w-full rounded-xl border px-3 text-xs outline-none focus:ring-2 focus:ring-brand/15"
+            />
+          </label>
+          <div className="flex justify-end gap-2 pt-2 sm:col-span-2">
+            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button type="submit"><Plus size={15} /> Add and select market</Button>
+          </div>
+        </form>
+      </Card>
+    </div>
   );
 }

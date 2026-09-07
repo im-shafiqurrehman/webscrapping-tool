@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from './auth-provider';
+import { useNotifications } from './notification-provider';
+import { useMarkets } from './market-provider';
 
 const navigation = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -40,15 +42,37 @@ const navigation = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const { user, signOut } = useAuth();
+  const { notifications, markAllRead } = useNotifications();
+  const { activeMarket, markets, selectMarket } = useMarkets();
   const [open, setOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
-  const [notifications, setNotifications] = useState([
-    { id: 'reply', title: 'Valley Smile Studio replied', detail: '24 minutes ago', href: '/pipeline' },
-    { id: 'meeting', title: 'Orchard Auto Care booked a meeting', detail: '1 hour ago', href: '/pipeline' },
-    { id: 'audit', title: 'Cedar & Stone audit was updated', detail: 'Yesterday', href: '/businesses/prospect-2' },
-  ]);
+  const workspaceMenuRef = useRef<HTMLDivElement>(null);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  const notificationMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (!workspaceMenuRef.current?.contains(target)) setWorkspaceOpen(false);
+      if (!accountMenuRef.current?.contains(target)) setAccountOpen(false);
+      if (!notificationMenuRef.current?.contains(target)) setNotificationOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setWorkspaceOpen(false);
+      setAccountOpen(false);
+      setNotificationOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, []);
   const initials =
     user?.name
       .split(/\s+/)
@@ -83,7 +107,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <X size={20} />
           </button>
         </div>
-        <div className="relative mx-4 mb-5">
+        <div ref={workspaceMenuRef} className="relative mx-4 mb-5">
           <button
             type="button"
             aria-label="Select workspace"
@@ -99,7 +123,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               Workspace
             </span>
             <span className="mt-1 flex items-center justify-between text-xs font-semibold">
-              <span>San Jose market</span>
+              <span className="truncate">{activeMarket.city} market</span>
               <ChevronDown
                 size={13}
                 className={cn('text-white/40 transition-transform', workspaceOpen && 'rotate-180')}
@@ -108,19 +132,38 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           {workspaceOpen && (
             <div className="absolute left-0 right-0 top-full z-[60] mt-2 overflow-hidden rounded-xl border border-white/10 bg-[#21312B] p-1 shadow-2xl">
-              <button
-                type="button"
-                onClick={() => setWorkspaceOpen(false)}
-                className="flex w-full items-center justify-between rounded-lg bg-white/[.08] px-3 py-2 text-left"
-              >
-                <span>
-                  <span className="block text-xs font-semibold text-white">San Jose market</span>
-                  <span className="mt-0.5 block text-[9px] text-white/40">Current workspace</span>
-                </span>
-                <span className="h-2 w-2 rounded-full bg-[#56D2A7]" />
-              </button>
+              <div className="max-h-60 overflow-y-auto">
+                {markets.map((market) => {
+                  const selected = market.id === activeMarket.id;
+                  return (
+                    <button
+                      key={market.id}
+                      type="button"
+                      aria-label={`Select ${market.city} market`}
+                      onClick={() => {
+                        selectMarket(market.id);
+                        setWorkspaceOpen(false);
+                      }}
+                      className={cn(
+                        'flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-white/[.08]',
+                        selected && 'bg-white/[.08]',
+                      )}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-xs font-semibold text-white">
+                          {market.city} market
+                        </span>
+                        <span className="mt-0.5 block truncate text-[9px] text-white/40">
+                          {selected ? 'Current workspace' : `${market.region}, ${market.country}`}
+                        </span>
+                      </span>
+                      {selected && <span className="h-2 w-2 shrink-0 rounded-full bg-[#56D2A7]" />}
+                    </button>
+                  );
+                })}
+              </div>
               <Link
-                href="/settings"
+                href="/settings/markets"
                 onClick={() => {
                   setWorkspaceOpen(false);
                   setOpen(false);
@@ -175,7 +218,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <Settings size={17} /> Settings
           </Link>
-          <div className="relative mt-2 border-t border-white/10 pt-3">
+          <div ref={accountMenuRef} className="relative mt-2 border-t border-white/10 pt-3">
             {accountOpen && (
               <div className="absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-white/10 bg-[#21312B] p-1 shadow-2xl">
                 <p className="truncate px-3 py-2 text-[10px] text-white/45">{user?.email}</p>
@@ -228,7 +271,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               placeholder="Search businesses, niches, or type “HVAC score > 75”"
             />
           </div>
-          <div className="relative ml-auto flex items-center gap-2">
+          <div ref={notificationMenuRef} className="relative ml-auto flex items-center gap-2">
             <button
               type="button"
               aria-label="Open notifications"
@@ -257,7 +300,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {notifications.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => setNotifications([])}
+                      onClick={markAllRead}
                       className="text-[10px] font-bold text-brand hover:underline"
                     >
                       Mark all read

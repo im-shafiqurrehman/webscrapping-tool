@@ -50,6 +50,11 @@ apiRouter.post(
 );
 apiRouter.get('/prospects/top', asyncHandler(c.topProspects));
 apiRouter.post('/research', authorize('admin', 'researcher'), asyncHandler(c.createResearch));
+apiRouter.post(
+  '/research/live-search',
+  authorize('admin', 'researcher'),
+  asyncHandler(c.liveResearch),
+);
 apiRouter.get('/research/:id', asyncHandler(c.getResearch));
 apiRouter.post('/outreach/generate', authorize('admin', 'sales'), asyncHandler(c.generateOutreach));
 apiRouter.patch('/pipeline/:id', authorize('admin', 'sales'), asyncHandler(c.updateLead));

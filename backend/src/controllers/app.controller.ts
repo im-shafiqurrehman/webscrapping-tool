@@ -21,7 +21,9 @@ import {
 import { AppError } from '../utils/errors.js';
 import { loginInput, signupInput } from '../validators/auth.validator.js';
 import { businessInput, businessPatch, businessQuery } from '../validators/business.validator.js';
+import { liveResearchInput } from '../validators/research.validator.js';
 import type { AuthRequest } from '../middlewares/auth.js';
+import { searchBusinessesWithXai } from '../services/xai-search.service.js';
 
 const id = (req: Request) => req.params.id as string;
 const logActivity = (req: AuthRequest, action: string, entityType: string, entityId?: unknown) =>
@@ -400,6 +402,13 @@ export async function createResearch(req: AuthRequest, res: Response) {
   const run = await ResearchRun.create({ ...req.body, status: 'Pending', createdBy: req.user?.id });
   void logActivity(req, 'research.created', 'ResearchRun', run._id);
   res.status(201).json(run);
+}
+
+export async function liveResearch(req: AuthRequest, res: Response) {
+  const input = liveResearchInput.parse(req.body);
+  const results = await searchBusinessesWithXai(input);
+  void logActivity(req, 'research.live_search', 'ResearchRun');
+  res.json(results);
 }
 
 export async function getResearch(req: Request, res: Response) {

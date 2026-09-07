@@ -20,6 +20,8 @@ import {
   Star,
 } from 'lucide-react';
 import type { DemoBusiness } from '@/lib/demo-data';
+import { demoMode } from '@/lib/api';
+import { gmailComposeUrl } from '@/lib/gmail';
 import {
   Avatar,
   Button,
@@ -30,6 +32,7 @@ import {
   ScoreRing,
   StatusDot,
 } from './ui';
+import { useNotifications } from './notification-provider';
 
 const tabs = [
   'Overview',
@@ -43,6 +46,7 @@ const tabs = [
   'Notes',
 ];
 export function BusinessDetail({ business }: { business: DemoBusiness }) {
+  const { notify } = useNotifications();
   const [tab, setTab] = useState('Overview');
   const [saved, setSaved] = useState(false);
   return (
@@ -57,6 +61,18 @@ export function BusinessDetail({ business }: { business: DemoBusiness }) {
           </Button>
         }
       />
+      {demoMode && (
+        <div className="mb-4 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+          <CircleAlert size={18} className="mt-0.5 shrink-0" />
+          <div>
+            <p className="text-xs font-bold">Illustrative demo record — not a real prospect</p>
+            <p className="mt-1 text-[10px] leading-4 text-amber-800">
+              The name, contact details, reviews, audit observations, and scores are synthetic.
+              Do not use them for outreach or business decisions.
+            </p>
+          </div>
+        </div>
+      )}
       <Card className="mb-4 p-5">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center">
           <div className="flex min-w-0 items-center gap-4">
@@ -71,9 +87,14 @@ export function BusinessDetail({ business }: { business: DemoBusiness }) {
                   <MapPin size={12} />
                   {business.area}
                 </span>
-                <a href={business.website} className="flex items-center gap-1 hover:text-brand">
+                <a
+                  href={business.website}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 hover:text-brand"
+                >
                   <Globe2 size={12} />
-                  Website <ExternalLink size={10} />
+                  {demoMode ? 'Demo website' : 'Website'} <ExternalLink size={10} />
                 </a>
                 <span className="flex items-center gap-1">
                   <Phone size={12} />
@@ -132,6 +153,11 @@ export function BusinessDetail({ business }: { business: DemoBusiness }) {
           onSave={() => {
             setSaved(true);
             setTimeout(() => setSaved(false), 2200);
+            notify({
+              title: `${tab} saved`,
+              detail: `${business.name} audit information was updated.`,
+              href: `/businesses/${business.id}`,
+            });
           }}
           saved={saved}
         />
@@ -282,20 +308,41 @@ function Overview({ business, onTab }: { business: DemoBusiness; onTab: (s: stri
           </div>
           <div className="mt-4 space-y-2">
             {[
-              'Official website',
-              'Public business profile',
-              business.sourceCount > 2 ? 'Public directory' : null,
+              {
+                label: demoMode ? 'Illustrative website' : 'Official website',
+                url: business.website,
+              },
+              {
+                label: demoMode ? 'Demo profile search' : 'Public business profile',
+                url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${business.name} ${business.city}`)}`,
+              },
+              business.sourceCount > 2
+                ? {
+                    label: demoMode ? 'Demo directory search' : 'Public directory',
+                    url: `https://www.google.com/search?q=${encodeURIComponent(`"${business.name}" ${business.city}`)}`,
+                  }
+                : null,
             ]
-              .filter(Boolean)
+              .filter((source): source is { label: string; url: string } => source !== null)
               .map((source) => (
-                <div
-                  key={source}
-                  className="flex items-center gap-2 rounded-xl border p-3 text-[11px] font-semibold"
+                <a
+                  key={source.label}
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 rounded-xl border p-3 text-[11px] font-semibold hover:border-brand/30 hover:bg-slate-50"
                 >
                   <FileText size={14} className="text-slate-400" />
-                  <span className="flex-1">{source}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block">{source.label}</span>
+                    {demoMode && (
+                      <span className="mt-0.5 block text-[9px] font-normal text-amber-700">
+                        Illustrative only — not verified evidence
+                      </span>
+                    )}
+                  </span>
                   <ExternalLink size={12} className="text-slate-400" />
-                </div>
+                </a>
               ))}
           </div>
         </Card>
@@ -563,8 +610,12 @@ function Outreach({ business }: { business: DemoBusiness }) {
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const body = `Hi ${business.name} team — while reviewing ${business.niche.toLowerCase()} businesses in San Jose, I noticed ${business.mainOpportunity.toLowerCase()}. I put together a short audit with three practical ideas that may help. Would it be useful if I sent it over?`;
-  const mailto = business.email
-    ? `mailto:${business.email}?subject=${encodeURIComponent(`A quick idea for ${business.name}`)}&body=${encodeURIComponent(`${body}\n\nBest,\nShafiq`)}`
+  const gmailUrl = business.email
+    ? gmailComposeUrl({
+        to: business.email,
+        subject: `A quick idea for ${business.name}`,
+        body: `${body}\n\nBest,\nShafiq`,
+      })
     : null;
   return (
     <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
@@ -611,13 +662,15 @@ function Outreach({ business }: { business: DemoBusiness }) {
             {saved ? <CheckCircle2 size={15} /> : <MessageSquareText size={15} />}
             {saved ? 'Draft saved' : 'Save as draft'}
           </Button>
-          {mailto ? (
+          {gmailUrl ? (
             <a
-              href={mailto}
+              href={gmailUrl}
+              target="_blank"
+              rel="noreferrer"
               data-testid="business-send-email"
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border bg-white px-4 text-sm font-semibold text-ink transition hover:-translate-y-px hover:bg-slate-50"
             >
-              <Mail size={15} /> Send email
+              <Mail size={15} /> Open in Gmail
             </a>
           ) : (
             <button

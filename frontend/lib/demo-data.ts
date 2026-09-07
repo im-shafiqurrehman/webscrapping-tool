@@ -354,7 +354,7 @@ export const businesses: DemoBusiness[] = raw.map((b, index) => ({
   area: b[3],
   city: 'San Jose',
   address: `${140 + index * 37} ${['N 1st St', 'Santa Clara St', 'Almaden Expy', 'Story Rd'][index % 4]}, San Jose, CA`,
-  website: `https://example.com/demo/${index + 1}`,
+  website: 'https://example.com',
   phone: `(408) 555-${String(1400 + index).slice(-4)}`,
   email: index % 3 === 0 ? undefined : `hello@demo-${index + 1}.example`,
   googleRating: b[4],
