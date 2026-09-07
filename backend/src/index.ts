@@ -24,6 +24,13 @@ import { apiRouter } from './routes/index.js';
 import { errorHandler, notFound } from './utils/errors.js';
 
 export const app = express();
+const corsOrigins = Array.from(
+  new Set([
+    ...env.CORS_ORIGIN.split(',').map((item) => item.trim()).filter(Boolean),
+    'https://webscrapping-tool-tsoa.vercel.app',
+  ]),
+);
+
 app.disable('x-powered-by');
 app.use(
   contentSecurityPolicy(),
@@ -40,7 +47,7 @@ app.use(
   xPoweredBy(),
   xXssProtection(),
 );
-app.use(cors({ origin: env.CORS_ORIGIN.split(',').map((item) => item.trim()), credentials: true }));
+app.use(cors({ origin: corsOrigins, credentials: true }));
 app.use(compression());
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: false, limit: '2mb' }));
