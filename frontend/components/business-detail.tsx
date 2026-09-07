@@ -14,7 +14,6 @@ import {
   Mail,
   MapPin,
   MessageSquareText,
-  MoreHorizontal,
   Phone,
   Save,
   Sparkles,
@@ -53,14 +52,9 @@ export function BusinessDetail({ business }: { business: DemoBusiness }) {
         title={business.name}
         description={`${business.industry} / ${business.niche} · ${business.area}, San Jose`}
         actions={
-          <>
-            <Button variant="secondary">
-              <MoreHorizontal size={16} />
-            </Button>
-            <Button>
-              <Mail size={15} /> Start outreach
-            </Button>
-          </>
+          <Button onClick={() => setTab('Outreach')}>
+            <Mail size={15} /> Start outreach
+          </Button>
         }
       />
       <Card className="mb-4 p-5">
@@ -278,7 +272,13 @@ function Overview({ business, onTab }: { business: DemoBusiness; onTab: (s: stri
         <Card className="p-5">
           <div className="flex justify-between">
             <h3 className="text-sm font-bold">Research sources</h3>
-            <button className="text-[10px] font-bold text-brand">View all</button>
+            <button
+              type="button"
+              onClick={() => onTab('Research')}
+              className="text-[10px] font-bold text-brand hover:underline"
+            >
+              View all
+            </button>
           </div>
           <div className="mt-4 space-y-2">
             {[
@@ -561,7 +561,11 @@ function Research({ business }: { business: DemoBusiness }) {
 }
 function Outreach({ business }: { business: DemoBusiness }) {
   const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
   const body = `Hi ${business.name} team — while reviewing ${business.niche.toLowerCase()} businesses in San Jose, I noticed ${business.mainOpportunity.toLowerCase()}. I put together a short audit with three practical ideas that may help. Would it be useful if I sent it over?`;
+  const mailto = business.email
+    ? `mailto:${business.email}?subject=${encodeURIComponent(`A quick idea for ${business.name}`)}&body=${encodeURIComponent(`${body}\n\nBest,\nShafiq`)}`
+    : null;
   return (
     <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
       <Card className="p-5">
@@ -602,14 +606,35 @@ function Outreach({ business }: { business: DemoBusiness }) {
             </p>
           ))}
         </div>
-        <Button className="mt-5 w-full">
-          <MessageSquareText size={15} /> Save as draft
-        </Button>
+        <div className="mt-5 grid gap-2">
+          <Button className="w-full" onClick={() => setSaved(true)}>
+            {saved ? <CheckCircle2 size={15} /> : <MessageSquareText size={15} />}
+            {saved ? 'Draft saved' : 'Save as draft'}
+          </Button>
+          {mailto ? (
+            <a
+              href={mailto}
+              data-testid="business-send-email"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border bg-white px-4 text-sm font-semibold text-ink transition hover:-translate-y-px hover:bg-slate-50"
+            >
+              <Mail size={15} /> Send email
+            </a>
+          ) : (
+            <button
+              disabled
+              title="No public email is available for this prospect"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border bg-slate-50 px-4 text-sm font-semibold text-slate-400"
+            >
+              <Mail size={15} /> No public email
+            </button>
+          )}
+        </div>
       </Card>
     </div>
   );
 }
 function Notes() {
+  const [saved, setSaved] = useState(false);
   return (
     <Card className="p-5">
       <h3 className="text-sm font-bold">Internal notes</h3>
@@ -618,8 +643,9 @@ function Notes() {
         placeholder="Add context for research and sales teammates…"
       />
       <div className="mt-3 flex justify-end">
-        <Button>
-          <Save size={15} /> Save notes
+        <Button onClick={() => setSaved(true)}>
+          {saved ? <CheckCircle2 size={15} /> : <Save size={15} />}
+          {saved ? 'Notes saved' : 'Save notes'}
         </Button>
       </div>
     </Card>

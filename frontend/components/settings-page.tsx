@@ -148,8 +148,12 @@ export function SettingsPage() {
                   </div>
                 ))}
               </div>
-              <Button className="mt-4">
-                <Plus size={15} /> Invite teammate
+              <Button
+                disabled
+                title="Team invitations require the production user-management service"
+                className="mt-4"
+              >
+                <Plus size={15} /> Invitations not configured
               </Button>
             </Card>
           )}
@@ -191,8 +195,13 @@ export function SettingsPage() {
                   ))}
                 </div>
               </div>
-              <Button variant="secondary" className="mt-4">
-                <Plus size={15} /> Add market
+              <Button
+                variant="secondary"
+                disabled
+                title="Additional markets require the production market-management service"
+                className="mt-4"
+              >
+                <Plus size={15} /> Additional markets not configured
               </Button>
             </Card>
           )}
@@ -215,8 +224,13 @@ export function SettingsPage() {
                     </span>
                     <p className="mt-3 text-xs font-bold">{name}</p>
                     <p className="mt-1 text-[9px] text-slate-400">{desc}</p>
-                    <Button variant="secondary" className="mt-4 h-8 px-3 text-[10px]">
-                      <KeyRound size={12} /> Configure
+                    <Button
+                      variant="secondary"
+                      disabled
+                      title="Provider credentials must be configured on the backend"
+                      className="mt-4 h-8 px-3 text-[10px]"
+                    >
+                      <KeyRound size={12} /> Not configured
                     </Button>
                   </div>
                 ))}

@@ -412,6 +412,14 @@ export const nicheRows = Array.from(byNiche, ([name, rows]) => ({
   ),
 })).sort((a, b) => b.score - a.score);
 
+export function nicheSlug(name: string) {
+  return name
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
 export const dashboardData = {
   metrics: {
     total: businesses.length,

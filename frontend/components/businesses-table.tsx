@@ -52,6 +52,9 @@ export function BusinessesTable() {
   const [sort, setSort] = useState('score');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  const [minimumScore, setMinimumScore] = useState(0);
+  const [tagged, setTagged] = useState(false);
   const filtered = useMemo(
     () =>
       rows
@@ -59,7 +62,8 @@ export function BusinessesTable() {
           (b) =>
             `${b.name} ${b.niche} ${b.area}`.toLowerCase().includes(query.toLowerCase()) &&
             (industry === 'All industries' || b.industry === industry) &&
-            (priority === 'All priorities' || b.priority === priority),
+            (priority === 'All priorities' || b.priority === priority) &&
+            b.clientScore >= minimumScore,
         )
         .sort((a, b) =>
           sort === 'score'
@@ -68,7 +72,7 @@ export function BusinessesTable() {
               ? b.googleReviews - a.googleReviews
               : a.name.localeCompare(b.name),
         ),
-    [rows, query, industry, priority, sort],
+    [rows, query, industry, priority, sort, minimumScore],
   );
   const allSelected = filtered.length > 0 && filtered.every((b) => selected.has(b.id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(filtered.map((b) => b.id)));
@@ -128,11 +132,40 @@ export function BusinessesTable() {
               options={['score', 'reviews', 'name']}
               labels={['Score: high to low', 'Most reviews', 'Business name']}
             />
-            <Button variant="secondary" className="px-3">
+            <Button
+              variant="secondary"
+              className="px-3"
+              aria-expanded={moreFiltersOpen}
+              onClick={() => setMoreFiltersOpen((current) => !current)}
+            >
               <SlidersHorizontal size={15} /> More filters
             </Button>
           </div>
         </div>
+        {moreFiltersOpen && (
+          <div className="flex flex-col gap-3 border-b bg-slate-50/60 px-4 py-3 sm:flex-row sm:items-center">
+            <label className="flex flex-1 items-center gap-3 text-[11px] font-semibold text-slate-600">
+              Minimum client score
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={minimumScore}
+                onChange={(event) => setMinimumScore(Number(event.target.value))}
+                className="max-w-xs flex-1 accent-emerald-700"
+              />
+              <strong className="w-8 text-ink">{minimumScore}</strong>
+            </label>
+            <button
+              type="button"
+              onClick={() => setMinimumScore(0)}
+              className="text-left text-[10px] font-bold text-brand hover:underline"
+            >
+              Clear advanced filters
+            </button>
+          </div>
+        )}
         <div className="flex h-11 items-center justify-between border-b bg-slate-50/50 px-4 text-[11px] text-slate-500">
           <span>
             <strong className="text-ink">{filtered.length}</strong> businesses · San Jose,
@@ -141,8 +174,22 @@ export function BusinessesTable() {
           {selected.size > 0 && (
             <div className="flex items-center gap-2">
               <span>{selected.size} selected</span>
-              <button className="flex items-center gap-1 font-semibold text-brand">
-                <Tag size={13} /> Add tag
+              <button
+                type="button"
+                onClick={() => {
+                  setRows((current) =>
+                    current.map((business) =>
+                      selected.has(business.id) && !business.tags.includes('Follow-up')
+                        ? { ...business, tags: [...business.tags, 'Follow-up'] }
+                        : business,
+                    ),
+                  );
+                  setTagged(true);
+                }}
+                className="flex items-center gap-1 font-semibold text-brand"
+              >
+                {tagged ? <Check size={13} /> : <Tag size={13} />}
+                {tagged ? 'Tagged' : 'Add tag'}
               </button>
               <button
                 onClick={() => {
@@ -235,9 +282,13 @@ export function BusinessesTable() {
                     <StatusDot status={business.status} />
                   </td>
                   <td>
-                    <button className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-ink">
+                    <Link
+                      href={`/businesses/${business.id}`}
+                      aria-label={`View details for ${business.name}`}
+                      className="inline-flex rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-ink"
+                    >
                       <MoreHorizontal size={16} />
-                    </button>
+                    </Link>
                   </td>
                 </tr>
               ))}
@@ -259,7 +310,7 @@ export function BusinessesTable() {
             <button disabled className="rounded-lg border p-1.5 opacity-40">
               <ChevronLeft size={14} />
             </button>
-            <button className="h-7 w-7 rounded-lg bg-ink font-bold text-white">1</button>
+            <button disabled className="h-7 w-7 rounded-lg bg-ink font-bold text-white">1</button>
             <button disabled className="rounded-lg border p-1.5 opacity-40">
               <ChevronRight size={14} />
             </button>

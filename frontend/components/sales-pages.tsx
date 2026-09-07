@@ -27,6 +27,7 @@ import {
   Trophy,
   UserCheck,
   WandSparkles,
+  X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { businesses, type Stage } from '@/lib/demo-data';
@@ -185,7 +186,16 @@ export function ProspectsPage() {
                 </div>
                 <div className="mt-3 flex items-center justify-between">
                   <PriorityBadge priority={business.priority} />
-                  <StatusDot status={business.status} />
+                  <div className="flex items-center gap-3">
+                    <StatusDot status={business.status} />
+                    <Link
+                      href={`/businesses/${business.id}`}
+                      aria-label={`View details for ${business.name}`}
+                      className="inline-flex items-center gap-1 text-[10px] font-bold text-brand hover:underline"
+                    >
+                      Details <MoveRight size={12} />
+                    </Link>
+                  </div>
                 </div>
               </div>
             </div>
@@ -213,6 +223,9 @@ const stages: Stage[] = [
 export function PipelinePage() {
   const [cards, setCards] = useState(businesses);
   const [drag, setDrag] = useState<string | null>(null);
+  const [followupsOpen, setFollowupsOpen] = useState(false);
+  const [addLeadOpen, setAddLeadOpen] = useState(false);
+  const followups = cards.filter((business) => ['Contacted', 'Follow Up'].includes(business.status));
   const move = (stage: Stage) => {
     if (!drag) return;
     setCards((c) => c.map((b) => (b.id === drag ? { ...b, status: stage } : b)));
@@ -226,10 +239,10 @@ export function PipelinePage() {
         description="Move qualified opportunities from research to a won client without losing the next action."
         actions={
           <>
-            <Button variant="secondary">
+            <Button variant="secondary" onClick={() => setFollowupsOpen(true)}>
               <Calendar size={15} /> Follow-ups
             </Button>
-            <Button>
+            <Button onClick={() => setAddLeadOpen(true)}>
               <Plus size={16} /> Add lead
             </Button>
           </>
@@ -241,7 +254,7 @@ export function PipelinePage() {
           value={cards.filter((b) => !['Won', 'Lost'].includes(b.status)).length}
           icon={<BriefcaseBusiness />}
         />
-        <PipelineMetric label="Follow-ups due" value={3} icon={<Calendar />} />
+        <PipelineMetric label="Follow-ups due" value={followups.length} icon={<Calendar />} />
         <PipelineMetric
           label="Won clients"
           value={cards.filter((b) => b.status === 'Won').length}
@@ -282,7 +295,16 @@ export function PipelinePage() {
                         <GripVertical size={14} className="mt-1 shrink-0 text-slate-300" />
                         <Avatar initials={business.initials} color={business.color} size="sm" />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[11px] font-bold">{business.name}</p>
+                          {business.id.startsWith('prospect-') ? (
+                            <Link
+                              href={`/businesses/${business.id}`}
+                              className="block truncate text-[11px] font-bold hover:text-brand hover:underline"
+                            >
+                              {business.name}
+                            </Link>
+                          ) : (
+                            <p className="truncate text-[11px] font-bold">{business.name}</p>
+                          )}
                           <p className="mt-0.5 text-[9px] text-slate-400">{business.niche}</p>
                         </div>
                         <span className="text-xs font-extrabold text-brand">
@@ -296,7 +318,17 @@ export function PipelinePage() {
                         </p>
                       </div>
                       <div className="mt-2 flex items-center justify-between text-[9px] text-slate-400">
-                        <span>SR</span>
+                        <Link
+                          href={
+                            business.id.startsWith('prospect-')
+                              ? `/businesses/${business.id}`
+                              : '/research'
+                          }
+                          draggable={false}
+                          className="font-bold text-brand hover:underline"
+                        >
+                          {business.id.startsWith('prospect-') ? 'View details' : 'Research lead'}
+                        </Link>
                         <span>{business.updatedAt}</span>
                       </div>
                     </div>
@@ -316,7 +348,152 @@ export function PipelinePage() {
         Drag a card between stages. In production, updates are authorized and written to the
         activity log.
       </p>
+      {followupsOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="followups-title"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/35 p-4 backdrop-blur-sm"
+        >
+          <Card className="w-full max-w-lg overflow-hidden">
+            <div className="flex items-center justify-between border-b p-5">
+              <div>
+                <h2 id="followups-title" className="font-bold">Follow-ups due</h2>
+                <p className="mt-1 text-[11px] text-slate-500">Contacted leads that need a next action.</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close follow-ups"
+                onClick={() => setFollowupsOpen(false)}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-ink"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            {followups.length ? (
+              <div className="max-h-96 divide-y overflow-y-auto">
+                {followups.map((business) => (
+                  <Link
+                    key={business.id}
+                    href={`/businesses/${business.id}`}
+                    onClick={() => setFollowupsOpen(false)}
+                    className="flex items-center gap-3 p-4 hover:bg-slate-50"
+                  >
+                    <Avatar initials={business.initials} color={business.color} size="sm" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-bold">{business.name}</span>
+                      <span className="mt-0.5 block text-[10px] text-slate-400">
+                        {business.nextAction} · {business.updatedAt}
+                      </span>
+                    </span>
+                    <MoveRight size={14} className="text-brand" />
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="p-8 text-center text-xs text-slate-500">No follow-ups are due.</p>
+            )}
+          </Card>
+        </div>
+      )}
+      {addLeadOpen && (
+        <AddLeadDialog
+          onClose={() => setAddLeadOpen(false)}
+          onAdd={(lead) => {
+            setCards((current) => [lead, ...current]);
+            setAddLeadOpen(false);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function AddLeadDialog({
+  onClose,
+  onAdd,
+}: {
+  onClose: () => void;
+  onAdd: (lead: (typeof businesses)[number]) => void;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-lead-title"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/35 p-4 backdrop-blur-sm"
+    >
+      <Card className="w-full max-w-md p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 id="add-lead-title" className="font-bold">Add a pipeline lead</h2>
+            <p className="mt-1 text-[11px] text-slate-500">Create a lead in the New Lead stage.</p>
+          </div>
+          <button
+            type="button"
+            aria-label="Close add lead"
+            onClick={onClose}
+            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-ink"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <form
+          className="mt-5 space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            const name = String(form.get('name')).trim();
+            const niche = String(form.get('niche')).trim();
+            if (!name || !niche) return;
+            onAdd({
+              ...businesses.at(-1)!,
+              id: `lead-${Date.now()}`,
+              name,
+              niche,
+              initials: name
+                .split(/\s+/)
+                .map((part) => part[0])
+                .join('')
+                .slice(0, 2)
+                .toUpperCase(),
+              status: 'New Lead',
+              priority: 'Medium',
+              clientScore: 50,
+              nextAction: 'Review lead and begin research',
+              updatedAt: 'Just now',
+              email: String(form.get('email')).trim() || undefined,
+            });
+          }}
+        >
+          <input
+            name="name"
+            required
+            aria-label="Lead name"
+            placeholder="Business name"
+            className="h-11 w-full rounded-xl border px-3 text-xs outline-none focus:ring-2 focus:ring-brand/15"
+          />
+          <input
+            name="niche"
+            required
+            aria-label="Lead niche"
+            placeholder="Niche, e.g. HVAC"
+            className="h-11 w-full rounded-xl border px-3 text-xs outline-none focus:ring-2 focus:ring-brand/15"
+          />
+          <input
+            name="email"
+            type="email"
+            aria-label="Lead email"
+            placeholder="Public email (optional)"
+            className="h-11 w-full rounded-xl border px-3 text-xs outline-none focus:ring-2 focus:ring-brand/15"
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button type="submit"><Plus size={15} /> Create lead</Button>
+          </div>
+        </form>
+      </Card>
+    </div>
   );
 }
 function PipelineMetric({
@@ -346,6 +523,8 @@ export function OutreachPage() {
   const [type, setType] = useState('Cold email');
   const [generated, setGenerated] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const [completed, setCompleted] = useState(false);
   const business = businesses.find((b) => b.id === selected)!;
   const messageTypes: Array<[string, LucideIcon]> = [
     ['Cold email', Mail],
@@ -359,6 +538,15 @@ export function OutreachPage() {
       : type === 'Short DM'
         ? `Hi ${business.name}! I spotted ${business.mainOpportunity.toLowerCase()}. Happy to send a quick, no-pressure audit with 3 ideas.`
         : `Hi ${business.name} team,\n\nWhile reviewing ${business.niche.toLowerCase()} businesses in San Jose, I noticed ${business.mainOpportunity.toLowerCase()}. I put together a brief audit with three practical ideas that could help improve visibility and enquiries.\n\nWould it be useful if I sent it over?\n\nBest,\nShafiq`;
+  const mailto = business.email
+    ? `mailto:${business.email}?subject=${encodeURIComponent(`A quick idea for ${business.name}`)}&body=${encodeURIComponent(body)}`
+    : null;
+  const resetActions = () => {
+    setGenerated(false);
+    setCopied(false);
+    setDraftSaved(false);
+    setCompleted(false);
+  };
   return (
     <>
       <PageHeader
@@ -375,7 +563,7 @@ export function OutreachPage() {
                 value={selected}
                 onChange={(e) => {
                   setSelected(e.target.value);
-                  setGenerated(false);
+                  resetActions();
                 }}
                 className="h-11 w-full appearance-none rounded-xl border bg-white pl-3 pr-9 text-xs font-bold"
               >
@@ -407,7 +595,7 @@ export function OutreachPage() {
                 <button
                   onClick={() => {
                     setType(String(label));
-                    setGenerated(false);
+                    resetActions();
                   }}
                   key={String(label)}
                   className={`rounded-xl border p-3 text-left ${type === label ? 'border-brand bg-emerald-50/50 ring-1 ring-brand' : 'hover:bg-slate-50'}`}
@@ -417,7 +605,14 @@ export function OutreachPage() {
                 </button>
               ))}
             </div>
-            <Button className="mt-4 w-full" onClick={() => setGenerated(true)}>
+            <Button
+              className="mt-4 w-full"
+              onClick={() => {
+                setGenerated(true);
+                setDraftSaved(false);
+                setCompleted(false);
+              }}
+            >
               <WandSparkles size={15} /> Generate message
             </Button>
           </Card>
@@ -460,11 +655,41 @@ export function OutreachPage() {
                 </p>
               </div>
               <div className="mt-4 flex justify-end gap-2">
-                <Button variant="secondary">Save draft</Button>
-                <Button>
-                  <Send size={14} /> Mark ready
+                <Button variant="secondary" onClick={() => setDraftSaved(true)}>
+                  {draftSaved ? <Check size={14} /> : <FileText size={14} />}
+                  {draftSaved ? 'Draft saved' : 'Save draft'}
                 </Button>
+                <Button onClick={() => setCompleted(true)} disabled={completed}>
+                  <CheckCircle2 size={14} /> {completed ? 'Completed' : 'Mark complete'}
+                </Button>
+                {mailto ? (
+                  <a
+                    href={mailto}
+                    data-testid="outreach-send-email"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-px hover:bg-[#26332f]"
+                  >
+                    <Send size={14} /> Send email
+                  </a>
+                ) : (
+                  <button
+                    disabled
+                    title="No public email is available for this prospect"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border bg-slate-50 px-4 text-sm font-semibold text-slate-400"
+                  >
+                    <Mail size={14} /> No public email
+                  </button>
+                )}
               </div>
+              {(draftSaved || completed) && (
+                <p
+                  role="status"
+                  className="mt-3 text-right text-[10px] font-semibold text-emerald-700"
+                >
+                  {completed
+                    ? 'Outreach task marked complete.'
+                    : 'Draft saved in this outreach workspace.'}
+                </p>
+              )}
             </>
           ) : (
             <div className="flex min-h-[390px] flex-col items-center justify-center text-center">
@@ -531,7 +756,15 @@ export function ReportsPage() {
         title="Reports & strategy"
         description="Generate traceable recommendations from the records in your workspace—never from invented market statistics."
         actions={
-          <Button variant="secondary">
+          <Button
+            variant="secondary"
+            onClick={() =>
+              downloadCsv(
+                'northstar-reports.csv',
+                reports.map(([title, description]) => ({ Report: title, Description: description })),
+              )
+            }
+          >
             <Download size={15} /> Export all
           </Button>
         }
@@ -700,7 +933,7 @@ export function ReportsPage() {
               <Button variant="secondary" onClick={() => setGenerated(null)}>
                 Close
               </Button>
-              <Button>
+              <Button onClick={() => window.print()}>
                 <Download size={14} /> Download PDF
               </Button>
             </div>

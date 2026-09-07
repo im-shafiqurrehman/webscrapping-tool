@@ -87,8 +87,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
                 type="email"
                 autoComplete="email"
                 required
-                defaultValue={!signup && demoMode ? 'admin@northstar.local' : ''}
-                placeholder="you@company.com"
+                placeholder={!signup && demoMode ? 'admin@northstar.local' : 'you@company.com'}
                 className="h-11 w-full rounded-xl border px-3 text-xs outline-none focus:ring-2 focus:ring-brand/15"
               />
             </Field>
@@ -97,7 +96,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
                 name="password"
                 show={show}
                 onToggle={() => setShow((current) => !current)}
-                defaultValue={!signup && demoMode ? 'Northstar123!' : undefined}
+                placeholder={!signup && demoMode ? 'Northstar123!' : 'Enter your password'}
                 signup={signup}
               />
             </Field>
@@ -178,13 +177,13 @@ function PasswordInput({
   name,
   show,
   onToggle,
-  defaultValue,
+  placeholder,
   signup,
 }: {
   name: string;
   show: boolean;
   onToggle?: () => void;
-  defaultValue?: string | undefined;
+  placeholder?: string;
   signup?: boolean;
 }) {
   return (
@@ -204,7 +203,7 @@ function PasswordInput({
         pattern={signup ? '(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,72}' : undefined}
         title={signup ? 'Use 8–72 characters with uppercase, lowercase, and a number.' : undefined}
         required
-        defaultValue={defaultValue}
+        placeholder={placeholder}
         className="h-11 w-full rounded-xl border pl-9 pr-10 text-xs outline-none focus:ring-2 focus:ring-brand/15"
       />
       {onToggle && (

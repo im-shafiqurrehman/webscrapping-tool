@@ -89,8 +89,20 @@ try {
     await page.waitForFunction(() => location.pathname === '/login');
     await waitForText('Welcome back');
 
+    const initialEmail = await page.$('input[name="email"]');
     const password = await page.$('input[name="password"]');
-    assert.ok(password, 'login password field should exist');
+    assert.ok(initialEmail && password, 'login fields should exist');
+    assert.equal(await initialEmail.evaluate((element) => element.value), '');
+    assert.equal(await password.evaluate((element) => element.value), '');
+    assert.equal(
+      await initialEmail.evaluate((element) => element.getAttribute('placeholder')),
+      'admin@northstar.local',
+    );
+    assert.equal(
+      await password.evaluate((element) => element.getAttribute('placeholder')),
+      'Northstar123!',
+    );
+    await initialEmail.type('admin@northstar.local');
     await replaceInput(password, 'WrongPassword1');
     await clickText('Sign in');
     await waitForText('Invalid credentials');
@@ -129,15 +141,42 @@ try {
     assert.match(await bodyText(), /Top opportunities/);
     assert.ok((await page.$$('svg.recharts-surface')).length >= 2, 'dashboard charts should render');
     await page.screenshot({ path: path.join(outputDirectory, 'dashboard.png'), fullPage: true });
+    await page.click('[data-testid="dashboard-prospect-prospect-1"]');
+    await page.waitForFunction(() => location.pathname === '/businesses/prospect-1');
+    await waitForText('Northstar Heating & Air');
   });
 
   await test('workspace navigation opens niche and audit views', async () => {
     await clickText('Niches', 'a');
     await page.waitForFunction(() => location.pathname === '/niches');
     await waitForText('Niche opportunities');
+    await clickText('HVAC', 'a');
+    await page.waitForFunction(() => location.pathname === '/niches/hvac');
+    await waitForText('Niche details');
+    await waitForText('Businesses in HVAC');
+    await go('/niches');
+    await page.click('a[aria-label="View Remodeling niche details"]');
+    await page.waitForFunction(() => location.pathname === '/niches/remodeling');
+    await waitForText('Businesses in Remodeling');
     await clickText('Audits', 'a');
     await page.waitForFunction(() => location.pathname === '/audits');
     await waitForText('Audit center');
+  });
+
+  await test('notifications open and expose an empty state after being read', async () => {
+    await page.click('button[aria-label="Open notifications"]');
+    await waitForText('3 unread');
+    await clickText('Mark all read');
+    await waitForText('No notifications');
+    await page.click('button[aria-label="Open notifications"]');
+  });
+
+  await test('workspace selector opens and links to market management', async () => {
+    await page.click('button[aria-label="Select workspace"]');
+    await waitForText('Current workspace');
+    const manageMarkets = await page.$('a[href="/settings"]');
+    assert.ok(manageMarkets, 'workspace menu should link to market management');
+    await page.click('button[aria-label="Select workspace"]');
   });
 
   await test('business table search, filters, export, and add flow work', async () => {
@@ -193,7 +232,7 @@ try {
     await waitForText('Saved');
     await clickText('Scoring');
     await waitForText('Client score breakdown');
-    await clickText('Outreach');
+    await clickText('Start outreach');
     await waitForText('Personalized cold email');
     await page.screenshot({ path: path.join(outputDirectory, 'business-detail.png'), fullPage: true });
   });
@@ -219,13 +258,34 @@ try {
       return button?.classList.contains('bg-ink');
     });
     await go('/outreach');
+    await page.select('select', 'prospect-2');
     await clickText('Generate message');
     await waitForText('Claim validation passed');
-    assert.match(await bodyText(), /A quick idea for Northstar Heating & Air/);
+    assert.match(await bodyText(), /A quick idea for Cedar & Stone Remodels/);
+    await clickText('Save draft');
+    await waitForText('Draft saved in this outreach workspace');
+    await clickText('Mark complete');
+    await waitForText('Outreach task marked complete');
+    const sendEmail = await page.$('[data-testid="outreach-send-email"]');
+    assert.ok(sendEmail, 'send email action should be available for prospects with public email');
+    assert.match(
+      (await sendEmail.evaluate((element) => element.getAttribute('href'))) ?? '',
+      /^mailto:hello@demo-2\.example\?/,
+    );
   });
 
   await test('pipeline supports native drag and drop between stages', async () => {
     await go('/pipeline');
+    await clickText('Follow-ups');
+    await waitForText('Contacted leads that need a next action');
+    await page.click('button[aria-label="Close follow-ups"]');
+    await clickText('Add lead');
+    await waitForText('Create a lead in the New Lead stage');
+    await page.type('input[aria-label="Lead name"]', 'QA Pipeline Lead');
+    await page.type('input[aria-label="Lead niche"]', 'Roofing');
+    await page.type('input[aria-label="Lead email"]', 'qa-pipeline@example.com');
+    await clickText('Create lead');
+    await waitForText('QA Pipeline Lead');
     const moved = await page.evaluate(async () => {
       const card = [...document.querySelectorAll('[draggable="true"]')].find((element) =>
         element.textContent?.includes('Northstar Heating & Air'),

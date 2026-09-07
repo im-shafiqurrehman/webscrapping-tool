@@ -21,7 +21,7 @@ import {
   Upload,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { businesses, nicheRows } from '@/lib/demo-data';
+import { businesses, nicheRows, nicheSlug } from '@/lib/demo-data';
 import { Button, Card, PageHeader, ScoreRing, SectionTitle } from './ui';
 
 export function NichesPage() {
@@ -40,9 +40,12 @@ export function NichesPage() {
         title="Niche opportunities"
         description="Compare market value, digital weakness, and the quality of prospects already researched."
         actions={
-          <Button>
+          <Link
+            href="/research"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#26332f]"
+          >
             <Plus size={16} /> Add niche
-          </Button>
+          </Link>
         }
       />
       <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr_1fr]">
@@ -114,9 +117,12 @@ export function NichesPage() {
               className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
             />
           </label>
-          <Button variant="secondary">
+          <Link
+            href="/settings"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border bg-white px-4 text-sm font-semibold text-ink hover:bg-slate-50"
+          >
             <SlidersHorizontal size={14} /> Scoring model
-          </Button>
+          </Link>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[950px] text-left">
@@ -145,10 +151,17 @@ export function NichesPage() {
                     </span>
                   </td>
                   <td>
-                    <div>
-                      <p className="text-[11px] font-bold group-hover:text-brand">{niche.name}</p>
-                      <p className="mt-0.5 text-[9px] text-slate-400">{niche.industry}</p>
-                    </div>
+                    <Link
+                      href={`/niches/${nicheSlug(niche.name)}`}
+                      className="inline-block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+                    >
+                      <span className="block text-[11px] font-bold group-hover:text-brand">
+                        {niche.name}
+                      </span>
+                      <span className="mt-0.5 block text-[9px] text-slate-400">
+                        {niche.industry}
+                      </span>
+                    </Link>
                   </td>
                   <td className="text-xs font-bold">{niche.businesses}</td>
                   <td>
@@ -171,7 +184,13 @@ export function NichesPage() {
                     <ScoreRing score={niche.score} size={40} />
                   </td>
                   <td>
-                    <ArrowRight size={15} className="text-slate-300 group-hover:text-brand" />
+                    <Link
+                      href={`/niches/${nicheSlug(niche.name)}`}
+                      aria-label={`View ${niche.name} niche details`}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-mint hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+                    >
+                      <ArrowRight size={15} />
+                    </Link>
                   </td>
                 </tr>
               ))}
@@ -275,9 +294,12 @@ export function AuditsPage() {
         title="Audit center"
         description="Evaluate public digital signals consistently, keep evidence, and surface the clearest opportunities."
         actions={
-          <Button>
+          <Link
+            href="/businesses"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#26332f]"
+          >
             <Plus size={16} /> New audit
-          </Button>
+          </Link>
         }
       />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

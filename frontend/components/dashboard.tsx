@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { activities, businesses } from '@/lib/demo-data';
 import { fetchDashboard } from '@/lib/api';
@@ -69,6 +70,7 @@ const metricCards = [
 ] as const;
 
 export function Dashboard() {
+  const router = useRouter();
   const { user } = useAuth();
   const { data, isError } = useQuery({ queryKey: ['dashboard'], queryFn: fetchDashboard });
   if (!data) {
@@ -229,9 +231,27 @@ export function Dashboard() {
             </thead>
             <tbody className="divide-y">
               {businesses.slice(0, 7).map((business) => (
-                <tr key={business.id} className="group hover:bg-[#F9FBF9]">
+                <tr
+                  key={business.id}
+                  role="link"
+                  tabIndex={0}
+                  data-testid={`dashboard-prospect-${business.id}`}
+                  aria-label={`View details for ${business.name}`}
+                  onClick={() => router.push(`/businesses/${business.id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      router.push(`/businesses/${business.id}`);
+                    }
+                  }}
+                  className="group cursor-pointer hover:bg-[#F9FBF9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+                >
                   <td className="px-5 py-3">
-                    <Link href={`/businesses/${business.id}`} className="flex items-center gap-3">
+                    <Link
+                      href={`/businesses/${business.id}`}
+                      onClick={(event) => event.stopPropagation()}
+                      className="flex items-center gap-3"
+                    >
                       <Avatar initials={business.initials} color={business.color} />
                       <span>
                         <span className="block text-xs font-bold text-ink group-hover:text-brand">
@@ -258,7 +278,7 @@ export function Dashboard() {
                   <td className="px-4">
                     <PriorityBadge priority={business.priority} />
                   </td>
-                  <td className="pr-4">
+                  <td className="pr-4" aria-hidden="true">
                     <ChevronRight size={16} className="text-slate-300 group-hover:text-brand" />
                   </td>
                 </tr>
