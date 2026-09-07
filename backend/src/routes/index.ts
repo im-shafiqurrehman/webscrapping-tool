@@ -1,12 +1,23 @@
 import { Router } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import * as c from '../controllers/app.controller.js';
 import { authenticate, authorize } from '../middlewares/auth.js';
 import { requireDatabase } from '../middlewares/database.js';
 import { asyncHandler } from '../utils/async-handler.js';
 
 export const apiRouter = Router();
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: { message: 'Too many authentication attempts. Please try again later.' } },
+});
+
 apiRouter.get('/health', (_req, res) => res.json({ status: 'ok' }));
-apiRouter.post('/auth/login', requireDatabase, asyncHandler(c.login));
+apiRouter.post('/auth/signup', authLimiter, requireDatabase, asyncHandler(c.signup));
+apiRouter.post('/auth/login', authLimiter, requireDatabase, asyncHandler(c.login));
+apiRouter.get('/auth/me', authenticate, requireDatabase, asyncHandler(c.currentUser));
 
 apiRouter.use(authenticate);
 apiRouter.use(requireDatabase);

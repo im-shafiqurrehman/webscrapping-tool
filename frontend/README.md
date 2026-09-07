@@ -13,7 +13,11 @@ npm run dev
 Environment variables:
 
 - `NEXT_PUBLIC_API_URL`: public backend API URL, including `/api`.
-- `NEXT_PUBLIC_DEMO_MODE`: `true` for the labelled sample workspace; `false` for API data.
+- `NEXT_PUBLIC_DEMO_MODE`: `true` for browser-local demo accounts; `false` for MongoDB/JWT authentication and API data.
+
+The demo administrator is `admin@northstar.local` with password `Northstar123!`. Accounts created
+in demo mode are stored only in that browser. In API mode, signup creates a researcher account in
+MongoDB and login issues an eight-hour JWT.
 
 ## Production
 
@@ -25,6 +29,9 @@ npm run typecheck
 npm run build
 npm start
 ```
+
+With the production server running on port `3010`, the browser suite can be run with
+`npm run test:e2e`.
 
 The folder can be deployed directly to Vercel or built with its standalone `Dockerfile`.
 

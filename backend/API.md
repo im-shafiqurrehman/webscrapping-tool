@@ -1,10 +1,12 @@
 # Northstar REST API
 
-Base URL: `/api`. Responses are JSON. Except for health and login, pass `Authorization: Bearer <token>`.
+Base URL: `/api`. Responses are JSON. Except for health, signup, and login, pass `Authorization: Bearer <token>`.
 
 ## Authentication and roles
 
-`POST /auth/login` accepts `{ "email": "…", "password": "…" }`.
+- `POST /auth/signup` accepts `{ "name": "…", "email": "…", "password": "…" }` and creates a researcher account.
+- `POST /auth/login` accepts `{ "email": "…", "password": "…" }`.
+- `GET /auth/me` returns the authenticated user.
 
 - Admin: full access, delete businesses, create niches.
 - Researcher: create/edit businesses, imports, audits, research runs, rescoring.
@@ -15,6 +17,9 @@ Base URL: `/api`. Responses are JSON. Except for health and login, pass `Authori
 | Method           | Route                        | Purpose                                     |
 | ---------------- | ---------------------------- | ------------------------------------------- |
 | GET              | `/health`                    | Liveness check                              |
+| POST             | `/auth/signup`               | Create an account and return an access token |
+| POST             | `/auth/login`                | Authenticate and return an access token      |
+| GET              | `/auth/me`                   | Return the authenticated user                |
 | GET/POST         | `/businesses`                | Paginated list or create                    |
 | GET/PATCH/DELETE | `/businesses/:id`            | Business profile operations                 |
 | POST             | `/businesses/import`         | Validated JSON batch, maximum 1,000 records |

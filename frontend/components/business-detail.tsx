@@ -88,7 +88,7 @@ export function BusinessDetail({ business }: { business: DemoBusiness }) {
               </div>
             </div>
           </div>
-          <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4 xl:ml-auto xl:max-w-2xl">
+          <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-[1.35fr_1fr_1fr_1fr] xl:ml-auto xl:max-w-3xl">
             <Summary label="Client score">
               <span className="flex items-center gap-2">
                 <ScoreRing score={business.clientScore} size={39} />

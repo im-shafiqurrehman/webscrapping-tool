@@ -19,6 +19,7 @@ import {
   recommendServices,
 } from '../services/scoring.service.js';
 import { AppError } from '../utils/errors.js';
+import { loginInput, signupInput } from '../validators/auth.validator.js';
 import { businessInput, businessPatch, businessQuery } from '../validators/business.validator.js';
 import type { AuthRequest } from '../middlewares/auth.js';
 
@@ -28,16 +29,54 @@ const logActivity = (req: AuthRequest, action: string, entityType: string, entit
     () => undefined,
   );
 
+type UserIdentity = {
+  id?: unknown;
+  _id?: unknown;
+  name: string;
+  email: string;
+  role: string;
+};
+
+const userId = (user: Pick<UserIdentity, 'id' | '_id'>) => String(user._id ?? user.id);
+
+const publicUser = (user: UserIdentity) => ({
+  id: userId(user),
+  name: user.name,
+  email: user.email,
+  role: user.role,
+});
+
+const accessToken = (user: Pick<UserIdentity, 'id' | '_id' | 'role'>) =>
+  jwt.sign({ id: userId(user), role: user.role }, env.JWT_SECRET, { expiresIn: '8h' });
+
+export async function signup(req: Request, res: Response) {
+  const { name, email, password } = signupInput.parse(req.body);
+  if (await User.exists({ email }))
+    throw new AppError(409, 'An account with this email already exists');
+
+  const user = await User.create({
+    name,
+    email,
+    passwordHash: await bcrypt.hash(password, 12),
+    role: 'researcher',
+    active: true,
+  });
+
+  res.status(201).json({ token: accessToken(user), user: publicUser(user) });
+}
+
 export async function login(req: Request, res: Response) {
-  const { email, password } = req.body as { email?: string; password?: string };
-  if (!email || !password) throw new AppError(422, 'Email and password are required');
-  const user = await User.findOne({ email: email.toLowerCase(), active: true }).select(
-    '+passwordHash',
-  );
+  const { email, password } = loginInput.parse(req.body);
+  const user = await User.findOne({ email, active: true }).select('+passwordHash');
   if (!user || !(await bcrypt.compare(password, user.passwordHash)))
     throw new AppError(401, 'Invalid credentials');
-  const token = jwt.sign({ id: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: '8h' });
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  res.json({ token: accessToken(user), user: publicUser(user) });
+}
+
+export async function currentUser(req: AuthRequest, res: Response) {
+  const user = await User.findOne({ _id: req.user?.id, active: true }).lean();
+  if (!user) throw new AppError(401, 'Your session is no longer valid');
+  res.json({ user: publicUser(user) });
 }
 
 export async function listBusinesses(req: Request, res: Response) {

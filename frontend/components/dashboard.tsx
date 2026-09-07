@@ -31,6 +31,7 @@ import { useQuery } from '@tanstack/react-query';
 import { activities, businesses } from '@/lib/demo-data';
 import { fetchDashboard } from '@/lib/api';
 import { Avatar, Card, PriorityBadge, Progress, ScoreRing, SectionTitle } from './ui';
+import { useAuth } from './auth-provider';
 
 const metricCards = [
   {
@@ -68,6 +69,7 @@ const metricCards = [
 ] as const;
 
 export function Dashboard() {
+  const { user } = useAuth();
   const { data, isError } = useQuery({ queryKey: ['dashboard'], queryFn: fetchDashboard });
   if (!data) {
     return (
@@ -96,7 +98,7 @@ export function Dashboard() {
             Sunday, September 6
           </p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-[28px]">
-            Good morning, Shafiq
+            Good morning, {user?.name.split(/\s+/)[0] ?? 'there'}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             Here’s where your best opportunities are right now.

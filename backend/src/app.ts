@@ -1,8 +1,8 @@
 import compression from 'compression';
 import cors from 'cors';
 import express from 'express';
-import rateLimit from 'express-rate-limit';
-import helmet from 'helmet';
+import { rateLimit } from 'express-rate-limit';
+import * as helmetModule from 'helmet';
 import morgan from 'morgan';
 import { env } from './config/env.js';
 import { sanitizeRequest } from './middlewares/sanitize.js';
@@ -11,7 +11,7 @@ import { errorHandler, notFound } from './utils/errors.js';
 
 export const app = express();
 app.disable('x-powered-by');
-app.use(helmet());
+app.use(helmetModule.default());
 app.use(cors({ origin: env.CORS_ORIGIN.split(',').map((item) => item.trim()), credentials: true }));
 app.use(compression());
 app.use(express.json({ limit: '2mb' }));

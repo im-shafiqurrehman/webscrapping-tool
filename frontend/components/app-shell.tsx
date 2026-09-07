@@ -13,6 +13,7 @@ import {
   FileText,
   FlaskConical,
   LayoutDashboard,
+  LogOut,
   Mail,
   Menu,
   Search,
@@ -22,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from './auth-provider';
 
 const navigation = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -37,7 +39,17 @@ const navigation = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  const { user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const initials =
+    user?.name
+      .split(/\s+/)
+      .map((part) => part[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() ?? 'NS';
+  const role = user?.role ? `${user.role[0]?.toUpperCase()}${user.role.slice(1)}` : '';
   return (
     <div className="min-h-screen bg-canvas">
       {open && (
@@ -111,21 +123,45 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <Settings size={17} /> Settings
           </Link>
-          <div className="mt-2 flex items-center gap-3 border-t border-white/10 px-2 pt-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E3A955] text-xs font-extrabold text-[#31210E]">
-              SR
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold">Shafiq Rehman</p>
-              <p className="text-[10px] text-white/40">Administrator</p>
-            </div>
-            <ChevronDown size={13} className="text-white/35" />
+          <div className="relative mt-2 border-t border-white/10 pt-3">
+            {accountOpen && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-white/10 bg-[#21312B] p-1 shadow-2xl">
+                <p className="truncate px-3 py-2 text-[10px] text-white/45">{user?.email}</p>
+                <button
+                  type="button"
+                  onClick={signOut}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-white/75 hover:bg-white/[.08] hover:text-white"
+                >
+                  <LogOut size={14} /> Sign out
+                </button>
+              </div>
+            )}
+            <button
+              type="button"
+              aria-label="Open account menu"
+              aria-expanded={accountOpen}
+              onClick={() => setAccountOpen((current) => !current)}
+              className="flex w-full items-center gap-3 rounded-xl px-2 py-1 text-left hover:bg-white/[.06]"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E3A955] text-xs font-extrabold text-[#31210E]">
+                {initials}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold">{user?.name}</span>
+                <span className="block text-[10px] text-white/40">{role}</span>
+              </span>
+              <ChevronDown size={13} className="text-white/35" />
+            </button>
           </div>
         </div>
       </aside>
       <div className="lg:pl-[238px]">
         <header className="sticky top-0 z-30 flex h-[72px] items-center border-b bg-white/90 px-4 backdrop-blur-md sm:px-7">
-          <button onClick={() => setOpen(true)} className="mr-3 text-slate-500 lg:hidden">
+          <button
+            aria-label="Open navigation"
+            onClick={() => setOpen(true)}
+            className="mr-3 text-slate-500 lg:hidden"
+          >
             <Menu size={22} />
           </button>
           <div className="relative hidden w-full max-w-lg sm:block">

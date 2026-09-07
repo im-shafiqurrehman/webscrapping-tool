@@ -18,6 +18,9 @@ Required production values:
 - `CORS_ORIGIN`: exact public frontend origin; comma-separated origins are supported.
 - `PORT`: defaults to `4000`.
 
+Public signup creates a `researcher` account; it never accepts a privileged role from the client.
+Administrator accounts can be provisioned with `npm run seed` or managed directly in MongoDB.
+
 ## Verification and production
 
 ```bash
