@@ -35,7 +35,7 @@ The folder includes a standalone multi-stage Dockerfile. See [API.md](API.md) fo
 
 ## Deploy on Vercel
 
-The API includes `src/index.ts`, which default-exports the Express application for Vercel’s Express runtime. MongoDB is connected lazily and the connection pool is reused by warm function instances. `src/server.ts` remains the local and Docker entry point.
+The API includes `src/index.ts`, which is the sole Vercel-recognized entry point and default-exports the Express application. MongoDB is connected lazily and the connection pool is reused by warm function instances. `src/local-server.ts` remains the local and Docker entry point.
 
 1. Import the same Git repository as a second Vercel project.
 2. Set **Root Directory** to `backend`.
