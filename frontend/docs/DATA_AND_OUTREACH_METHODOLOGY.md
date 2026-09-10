@@ -63,13 +63,31 @@ CAPTCHAs, robots controls, rate limits, or provider/site terms.
 
 ### Daily collection workflow
 
-The current endpoint performs on-demand searches. Reliable daily collection additionally requires
-a scheduler and queue, for example Vercel Cron invoking a protected backend job endpoint, or a
-dedicated worker/queue service. The daily job should enumerate active market+niche scopes, enforce
-provider budgets and concurrency, retry transient failures, deduplicate candidates, record run
-status, and alert operators about failures. A database lock/idempotency key must prevent duplicate
-runs. Vercel function-duration limits must also be respected; larger crawls belong in a durable
-worker rather than one long request.
+Daily discovery is implemented as persistent MongoDB schedules and jobs. The Research screen lets
+an Admin or Researcher save the current market+niche scope, pause/resume it, delete it, inspect recent
+job status, and retry a failed job. The backend Vercel cron runs at 03:00 UTC and is protected by a
+server-side `CRON_SECRET` Authorization header.
+
+For every invocation, the worker:
+
+1. Reconciles every due active schedule into a job with a unique schedule-occurrence key.
+2. Advances the schedule to its next daily UTC occurrence.
+3. Atomically claims queued jobs and recovers locks left stale by interrupted functions.
+4. Atomically reserves xAI daily-budget capacity before making a provider request.
+5. Runs a bounded number of jobs concurrently and retries failures after a delay.
+6. Stores the structured response and counts on the durable job record.
+7. Deduplicates candidates by normalized website domain, or by normalized name+city+country when no
+   website is known, while merging source URLs and tracking first/last seen times.
+
+Production requires `CRON_SECRET` (at least 16 random characters), `XAI_API_KEY`, MongoDB, and the
+normal authentication variables. `XAI_DAILY_SEARCH_BUDGET`, `RESEARCH_JOBS_PER_CRON`, and
+`RESEARCH_JOB_MAX_ATTEMPTS` control spend, concurrency, and retries. The included once-daily cron is
+compatible with Vercel Hobby. If a paid plan later needs per-schedule run times, the cron can be
+changed to hourly while the persisted `timeUtc` field continues to determine when each scope is due.
+
+This MongoDB queue survives serverless restarts and makes each provider call recoverable. Very large
+or long-running crawls should still move to a dedicated queue/worker platform rather than increasing
+one function's duration indefinitely.
 
 ## Recommended real-data pipeline
 

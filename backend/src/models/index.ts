@@ -222,6 +222,88 @@ const nicheScoreSchema = new Schema(
   options,
 );
 
+const researchScheduleSchema = new Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    market: {
+      city: { type: String, required: true, trim: true },
+      region: { type: String, required: true, trim: true },
+      country: { type: String, required: true, trim: true },
+      area: { type: String, trim: true },
+    },
+    industry: { type: String, required: true, trim: true },
+    niche: { type: String, required: true, trim: true },
+    limit: { type: Number, min: 1, max: 20, default: 10 },
+    timeUtc: { type: String, required: true, default: '03:00' },
+    enabled: { type: Boolean, default: true, index: true },
+    nextRunAt: { type: Date, required: true, index: true },
+    lastRunAt: Date,
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  },
+  options,
+);
+researchScheduleSchema.index({ enabled: 1, nextRunAt: 1 });
+
+const researchJobSchema = new Schema(
+  {
+    schedule: { type: Schema.Types.ObjectId, ref: 'ResearchSchedule', required: true, index: true },
+    idempotencyKey: { type: String, required: true, unique: true },
+    status: {
+      type: String,
+      enum: ['queued', 'running', 'completed', 'failed'],
+      default: 'queued',
+      index: true,
+    },
+    scheduledFor: { type: Date, required: true, index: true },
+    attempts: { type: Number, default: 0 },
+    maxAttempts: { type: Number, default: 3 },
+    lockedAt: Date,
+    lockExpiresAt: Date,
+    startedAt: Date,
+    completedAt: Date,
+    result: Schema.Types.Mixed,
+    discoveredCount: { type: Number, default: 0 },
+    newCandidateCount: { type: Number, default: 0 },
+    error: String,
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  },
+  options,
+);
+researchJobSchema.index({ status: 1, scheduledFor: 1 });
+
+const researchCandidateSchema = new Schema(
+  {
+    fingerprint: { type: String, required: true, unique: true },
+    name: { type: String, required: true, trim: true },
+    market: Schema.Types.Mixed,
+    industry: String,
+    niche: String,
+    address: String,
+    website: urlField,
+    phone: String,
+    publicEmail: String,
+    googleRating: Number,
+    googleReviews: Number,
+    evidenceSummary: String,
+    sourceUrls: [urlField],
+    firstSeenAt: { type: Date, default: Date.now },
+    lastSeenAt: { type: Date, default: Date.now, index: true },
+    seenCount: { type: Number, default: 1 },
+    lastJob: { type: Schema.Types.ObjectId, ref: 'ResearchJob' },
+  },
+  options,
+);
+
+const providerUsageSchema = new Schema(
+  {
+    key: { type: String, required: true, unique: true },
+    provider: { type: String, required: true },
+    utcDay: { type: String, required: true },
+    used: { type: Number, default: 0 },
+  },
+  options,
+);
+
 export const User = model('User', userSchema);
 export const Industry = model('Industry', industrySchema);
 export const Niche = model('Niche', nicheSchema);
@@ -242,3 +324,7 @@ export const Report = model('Report', reportSchema);
 export const Service = model('Service', serviceSchema);
 export const Tag = model('Tag', tagSchema);
 export const Location = model('Location', locationSchema);
+export const ResearchSchedule = model('ResearchSchedule', researchScheduleSchema);
+export const ResearchJob = model('ResearchJob', researchJobSchema);
+export const ResearchCandidate = model('ResearchCandidate', researchCandidateSchema);
+export const ProviderUsage = model('ProviderUsage', providerUsageSchema);

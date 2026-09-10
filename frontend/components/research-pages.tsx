@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -10,6 +10,7 @@ import {
   ChevronDown,
   CircleAlert,
   Clock3,
+  CalendarClock,
   ExternalLink,
   FileJson,
   FileSpreadsheet,
@@ -18,10 +19,12 @@ import {
   Loader2,
   Plus,
   Search,
+  RefreshCw,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Upload,
+  Trash2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { businesses, nicheRows, nicheSlug } from '@/lib/demo-data';
@@ -30,7 +33,14 @@ import { useMarkets } from './market-provider';
 import { useNotifications } from './notification-provider';
 import {
   demoMode,
+  createResearchSchedule,
+  deleteResearchSchedule,
+  fetchResearchAutomation,
+  retryResearchJob,
   runLiveResearch,
+  setResearchScheduleEnabled,
+  type ResearchJob,
+  type ResearchSchedule,
   type LiveResearchResponse,
 } from '@/lib/api';
 
@@ -694,6 +704,13 @@ export function ResearchPage() {
           )}
         </Card>
         <div className="space-y-4">
+          <DailyAutomationPanel
+            market={activeMarket}
+            area={area}
+            industry={industry}
+            niche={niche}
+            limit={resultLimit}
+          />
           <Card className="p-5">
             <SectionTitle title="Responsible research" />
             <div className="mt-4 space-y-3">
@@ -753,6 +770,186 @@ export function ResearchPage() {
         </div>
       </div>
     </>
+  );
+}
+
+function DailyAutomationPanel({
+  market,
+  area,
+  industry,
+  niche,
+  limit,
+}: {
+  market: { city: string; region: string; country: string };
+  area: string;
+  industry: string;
+  niche: string;
+  limit: number;
+}) {
+  const { notify } = useNotifications();
+  const timeUtc = '03:00';
+  const [schedules, setSchedules] = useState<ResearchSchedule[]>([]);
+  const [jobs, setJobs] = useState<ResearchJob[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = async () => {
+    if (demoMode) return;
+    setError(null);
+    try {
+      const data = await fetchResearchAutomation();
+      setSchedules(data.schedules);
+      setJobs(data.jobs);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not load automation');
+    }
+  };
+
+  useEffect(() => {
+    if (demoMode) return;
+    void fetchResearchAutomation()
+      .then((data) => {
+        setSchedules(data.schedules);
+        setJobs(data.jobs);
+      })
+      .catch((caught: unknown) => {
+        setError(caught instanceof Error ? caught.message : 'Could not load automation');
+      });
+  }, []);
+
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await createResearchSchedule({
+        name: `${market.city} ${niche} daily search`,
+        market: {
+          city: market.city,
+          region: market.region,
+          country: market.country,
+          ...(area.startsWith('All ') ? {} : { area }),
+        },
+        industry,
+        niche,
+        limit,
+        timeUtc,
+        enabled: true,
+      });
+      await refresh();
+      notify({
+        title: 'Daily search scheduled',
+        detail: `${niche} in ${market.city} will run daily at ${timeUtc} UTC.`,
+        href: '/research',
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not save schedule');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const mutate = async (action: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Automation update failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between gap-3">
+        <SectionTitle title="Daily automation" />
+        <button
+          aria-label="Refresh automation status"
+          onClick={() => void refresh()}
+          disabled={demoMode || busy}
+          className="text-slate-400 hover:text-brand disabled:opacity-40"
+        >
+          <RefreshCw size={14} />
+        </button>
+      </div>
+      <p className="mt-2 text-[10px] leading-4 text-slate-500">
+        Save this market and niche as a persistent daily Grok search. Times are UTC.
+      </p>
+      <div className="mt-3 flex items-center gap-2">
+        <div className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-[10px]">
+          Runs daily at <strong>03:00 UTC</strong>
+        </div>
+        <Button onClick={() => void save()} disabled={demoMode || busy}>
+          <CalendarClock size={14} /> Schedule
+        </Button>
+      </div>
+      {demoMode && (
+        <p className="mt-3 rounded-lg bg-amber-50 p-2 text-[9px] leading-4 text-amber-800">
+          Daily jobs become available after demo mode is disabled and the backend cron variables are configured.
+        </p>
+      )}
+      {error && <p role="alert" className="mt-3 text-[10px] text-red-600">{error}</p>}
+      {!demoMode && schedules.length === 0 && (
+        <p className="mt-4 text-[10px] text-slate-400">No daily searches configured.</p>
+      )}
+      <div className="mt-4 space-y-2">
+        {schedules.slice(0, 4).map((schedule) => (
+          <div key={schedule._id} className="rounded-xl border p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-[11px] font-bold">{schedule.name}</p>
+                <p className="mt-1 text-[9px] text-slate-400">
+                  {schedule.timeUtc} UTC · next {new Date(schedule.nextRunAt).toLocaleString()}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => void mutate(() => setResearchScheduleEnabled(schedule._id, !schedule.enabled))}
+                  disabled={busy}
+                  className={`rounded-full px-2 py-1 text-[9px] font-bold ${schedule.enabled ? 'bg-mint text-brand' : 'bg-slate-100 text-slate-500'}`}
+                >
+                  {schedule.enabled ? 'Active' : 'Paused'}
+                </button>
+                <button
+                  aria-label={`Delete ${schedule.name}`}
+                  onClick={() => void mutate(() => deleteResearchSchedule(schedule._id))}
+                  disabled={busy}
+                  className="text-slate-300 hover:text-red-500"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {jobs.length > 0 && (
+        <div className="mt-4 border-t pt-3">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Recent jobs</p>
+          <div className="mt-2 space-y-2">
+            {jobs.slice(0, 3).map((job) => (
+              <div key={job._id} className="flex items-center justify-between gap-2 text-[10px]">
+                <span className="min-w-0 truncate">{job.schedule?.name ?? 'Deleted schedule'}</span>
+                <span className={job.status === 'completed' ? 'text-brand' : job.status === 'failed' ? 'text-red-600' : 'text-blue-600'}>
+                  {job.status} {job.status === 'completed' ? `· ${job.newCandidateCount} new` : ''}
+                </span>
+                {job.status === 'failed' && (
+                  <button
+                    onClick={() => void mutate(() => retryResearchJob(job._id))}
+                    disabled={busy}
+                    className="font-bold text-brand"
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
 

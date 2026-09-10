@@ -9,7 +9,10 @@ import {
   Lead,
   Niche,
   Outreach,
+  ResearchCandidate,
+  ResearchJob,
   ResearchRun,
+  ResearchSchedule,
   User,
 } from '../models/index.js';
 import { findBusinesses } from '../repositories/business.repository.js';
@@ -21,9 +24,18 @@ import {
 import { AppError } from '../utils/errors.js';
 import { loginInput, signupInput } from '../validators/auth.validator.js';
 import { businessInput, businessPatch, businessQuery } from '../validators/business.validator.js';
-import { liveResearchInput } from '../validators/research.validator.js';
+import {
+  liveResearchInput,
+  researchScheduleInput,
+  researchSchedulePatch,
+} from '../validators/research.validator.js';
 import type { AuthRequest } from '../middlewares/auth.js';
 import { searchBusinessesWithXai } from '../services/xai-search.service.js';
+import {
+  isValidCronAuthorization,
+  nextDailyRun,
+  runDailyResearchCron,
+} from '../services/research-scheduler.service.js';
 
 const id = (req: Request) => req.params.id as string;
 const logActivity = (req: AuthRequest, action: string, entityType: string, entityId?: unknown) =>
@@ -409,6 +421,89 @@ export async function liveResearch(req: AuthRequest, res: Response) {
   const results = await searchBusinessesWithXai(input);
   void logActivity(req, 'research.live_search', 'ResearchRun');
   res.json(results);
+}
+
+export async function dailyResearchCron(req: Request, res: Response) {
+  if (!env.CRON_SECRET) throw new AppError(503, 'CRON_SECRET is not configured');
+  if (!isValidCronAuthorization(req.get('authorization'), env.CRON_SECRET)) {
+    throw new AppError(401, 'Invalid cron authorization');
+  }
+  res.json({ ok: true, ...(await runDailyResearchCron()) });
+}
+
+export async function listResearchSchedules(req: AuthRequest, res: Response) {
+  const schedules = await ResearchSchedule.find({ createdBy: req.user?.id })
+    .sort({ createdAt: -1 })
+    .lean();
+  res.json({ data: schedules });
+}
+
+export async function createResearchSchedule(req: AuthRequest, res: Response) {
+  const input = researchScheduleInput.parse(req.body);
+  const schedule = await ResearchSchedule.create({
+    ...input,
+    nextRunAt: nextDailyRun(input.timeUtc),
+    createdBy: req.user?.id,
+  });
+  void logActivity(req, 'research.schedule_created', 'ResearchSchedule', schedule._id);
+  res.status(201).json(schedule);
+}
+
+export async function updateResearchSchedule(req: AuthRequest, res: Response) {
+  const input = researchSchedulePatch.parse(req.body);
+  const schedule = await ResearchSchedule.findOne({ _id: id(req), createdBy: req.user?.id });
+  if (!schedule) throw new AppError(404, 'Research schedule not found');
+  Object.assign(schedule, input);
+  if (input.timeUtc || input.enabled === true) {
+    schedule.nextRunAt = nextDailyRun(schedule.timeUtc);
+  }
+  await schedule.save();
+  void logActivity(req, 'research.schedule_updated', 'ResearchSchedule', schedule._id);
+  res.json(schedule);
+}
+
+export async function deleteResearchSchedule(req: AuthRequest, res: Response) {
+  const schedule = await ResearchSchedule.findOneAndDelete({
+    _id: id(req),
+    createdBy: req.user?.id,
+  });
+  if (!schedule) throw new AppError(404, 'Research schedule not found');
+  await ResearchJob.updateMany(
+    { schedule: schedule._id, status: 'queued' },
+    { $set: { status: 'failed', error: 'Schedule deleted before execution' } },
+  );
+  res.status(204).end();
+}
+
+export async function listResearchJobs(req: AuthRequest, res: Response) {
+  const jobs = await ResearchJob.find({ createdBy: req.user?.id })
+    .populate('schedule', 'name market industry niche timeUtc')
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
+  res.json({ data: jobs });
+}
+
+export async function retryResearchJob(req: AuthRequest, res: Response) {
+  const job = await ResearchJob.findOneAndUpdate(
+    { _id: id(req), createdBy: req.user?.id, status: 'failed' },
+    {
+      $set: { status: 'queued', scheduledFor: new Date(), attempts: 0, error: null },
+      $unset: { completedAt: 1, lockedAt: 1, lockExpiresAt: 1 },
+    },
+    { new: true },
+  );
+  if (!job) throw new AppError(404, 'Failed research job not found');
+  res.json(job);
+}
+
+export async function listResearchCandidates(req: AuthRequest, res: Response) {
+  const jobIds = await ResearchJob.find({ createdBy: req.user?.id }).distinct('_id');
+  const candidates = await ResearchCandidate.find({ lastJob: { $in: jobIds } })
+    .sort({ lastSeenAt: -1 })
+    .limit(100)
+    .lean();
+  res.json({ data: candidates });
 }
 
 export async function getResearch(req: Request, res: Response) {

@@ -46,6 +46,7 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new Error(payload?.error?.message ?? `Request failed with status ${response.status}`);
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -202,6 +203,69 @@ export async function runLiveResearch(input: {
     method: 'POST',
     body: JSON.stringify(input),
   });
+}
+
+export interface ResearchSchedule {
+  _id: string;
+  name: string;
+  market: { city: string; region: string; country: string; area?: string };
+  industry: string;
+  niche: string;
+  limit: number;
+  timeUtc: string;
+  enabled: boolean;
+  nextRunAt: string;
+  lastRunAt?: string;
+}
+
+export interface ResearchJob {
+  _id: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  scheduledFor: string;
+  attempts: number;
+  discoveredCount: number;
+  newCandidateCount: number;
+  error?: string;
+  schedule?: { name: string };
+}
+
+export async function fetchResearchAutomation() {
+  if (demoMode) return { schedules: [], jobs: [] };
+  const [schedules, jobs] = await Promise.all([
+    apiRequest<{ data: ResearchSchedule[] }>('/research/schedules'),
+    apiRequest<{ data: ResearchJob[] }>('/research/jobs'),
+  ]);
+  return { schedules: schedules.data, jobs: jobs.data };
+}
+
+export async function createResearchSchedule(input: {
+  name: string;
+  market: { city: string; region: string; country: string; area?: string };
+  industry: string;
+  niche: string;
+  limit: number;
+  timeUtc: string;
+  enabled: boolean;
+}) {
+  return apiRequest<ResearchSchedule>('/research/schedules', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function setResearchScheduleEnabled(id: string, enabled: boolean) {
+  return apiRequest<ResearchSchedule>(`/research/schedules/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export async function deleteResearchSchedule(id: string) {
+  return apiRequest<void>(`/research/schedules/${id}`, { method: 'DELETE' });
+}
+
+export async function retryResearchJob(id: string) {
+  return apiRequest<ResearchJob>(`/research/jobs/${id}/retry`, { method: 'POST' });
 }
 
 function readDemoUsers(): DemoUser[] {

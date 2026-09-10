@@ -286,6 +286,15 @@ try {
     await clickText('Continue to data');
     await waitForText('Add public business data');
     await waitForText('Live business discovery');
+    await waitForText('Daily automation');
+    await waitForText('Runs daily at 03:00 UTC');
+    const disabledSchedule = await page.evaluate(() => {
+      const button = [...document.querySelectorAll('button')].find((candidate) =>
+        candidate.textContent?.includes('Schedule'),
+      );
+      return button instanceof HTMLButtonElement && button.disabled;
+    });
+    assert.equal(disabledSchedule, true, 'daily scheduling should be disabled in demo mode');
     await clickText('Search live data');
     await waitForText('Live search is disabled');
     await clickText('CSV');

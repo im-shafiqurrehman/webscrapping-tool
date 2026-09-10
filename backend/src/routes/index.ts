@@ -18,6 +18,7 @@ apiRouter.get('/health', (_req, res) => res.json({ status: 'ok' }));
 apiRouter.post('/auth/signup', authLimiter, requireDatabase, asyncHandler(c.signup));
 apiRouter.post('/auth/login', authLimiter, requireDatabase, asyncHandler(c.login));
 apiRouter.get('/auth/me', authenticate, requireDatabase, asyncHandler(c.currentUser));
+apiRouter.get('/cron/daily-research', requireDatabase, asyncHandler(c.dailyResearchCron));
 
 apiRouter.use(authenticate);
 apiRouter.use(requireDatabase);
@@ -54,6 +55,29 @@ apiRouter.post(
   '/research/live-search',
   authorize('admin', 'researcher'),
   asyncHandler(c.liveResearch),
+);
+apiRouter
+  .route('/research/schedules')
+  .get(authorize('admin', 'researcher'), asyncHandler(c.listResearchSchedules))
+  .post(authorize('admin', 'researcher'), asyncHandler(c.createResearchSchedule));
+apiRouter
+  .route('/research/schedules/:id')
+  .patch(authorize('admin', 'researcher'), asyncHandler(c.updateResearchSchedule))
+  .delete(authorize('admin', 'researcher'), asyncHandler(c.deleteResearchSchedule));
+apiRouter.get(
+  '/research/jobs',
+  authorize('admin', 'researcher'),
+  asyncHandler(c.listResearchJobs),
+);
+apiRouter.post(
+  '/research/jobs/:id/retry',
+  authorize('admin', 'researcher'),
+  asyncHandler(c.retryResearchJob),
+);
+apiRouter.get(
+  '/research/candidates',
+  authorize('admin', 'researcher'),
+  asyncHandler(c.listResearchCandidates),
 );
 apiRouter.get('/research/:id', asyncHandler(c.getResearch));
 apiRouter.post('/outreach/generate', authorize('admin', 'sales'), asyncHandler(c.generateOutreach));

@@ -30,6 +30,12 @@ Base URL: `/api`. Responses are JSON. Except for health, signup, and login, pass
 | GET              | `/prospects/top?limit=20`    | Top prospects (maximum 100)                 |
 | POST/GET         | `/research`, `/research/:id` | Create/read a research run                  |
 | POST             | `/research/live-search`      | Discover cited live candidates with Grok Web Search |
+| GET/POST         | `/research/schedules`        | List or create persistent daily searches   |
+| PATCH/DELETE     | `/research/schedules/:id`    | Pause, resume, edit, or remove a schedule   |
+| GET              | `/research/jobs`             | Inspect the latest 50 durable jobs          |
+| POST             | `/research/jobs/:id/retry`   | Requeue a failed job                        |
+| GET              | `/research/candidates`       | List deduplicated discovered candidates     |
+| GET              | `/cron/daily-research`       | Secret-protected Vercel cron worker         |
 | PATCH            | `/pipeline/:businessId`      | Update pipeline status and next action      |
 | POST             | `/outreach/generate`         | Generate a message from stored findings     |
 | GET              | `/reports/market`            | Market report using supported samples       |
@@ -72,3 +78,20 @@ Errors follow `{ "error": { "message": "…", "details": {} } }`. Missing inform
 The response includes `provider`, `model`, `searchedAt`, `businesses`, and `citations`. Each
 business must contain at least one `sourceUrls` entry. These are discovery candidates and must be
 reviewed before import, scoring, or outreach.
+
+## Daily research automation
+
+`POST /research/schedules` accepts the same market, industry, niche, and limit fields as live
+search, plus `name`, `timeUtc`, and `enabled`. The deployed backend invokes
+`GET /cron/daily-research` at 03:00 UTC through `backend/vercel.json`. Vercel supplies
+`Authorization: Bearer <CRON_SECRET>`; the endpoint rejects missing or invalid credentials.
+
+The worker reconciles due schedules into MongoDB-backed jobs. A unique schedule-occurrence key
+prevents duplicate enqueueing. Jobs use atomic claims with expiring locks, retry transient failures,
+and retain status/results for the Research screen. Candidate records are deduplicated by normalized
+website domain, falling back to normalized business name plus city and country. Existing candidates
+are updated with the latest observation and their source URLs are merged.
+
+Required production variables are `CRON_SECRET`, `XAI_API_KEY`, `MONGODB_URI`, and `JWT_SECRET`.
+Optional controls are `XAI_DAILY_SEARCH_BUDGET`, `RESEARCH_JOBS_PER_CRON`, and
+`RESEARCH_JOB_MAX_ATTEMPTS`. The budget is reserved atomically per UTC day, including retries.

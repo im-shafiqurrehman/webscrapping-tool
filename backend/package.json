@@ -12,7 +12,7 @@
     "start": "node dist/local-server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --max-warnings=0",
-    "test": "NODE_ENV=test JWT_SECRET=test-only-jwt-secret-at-least-32-characters npm run build && NODE_ENV=test JWT_SECRET=test-only-jwt-secret-at-least-32-characters node --test dist/services/scoring.service.test.js dist/services/xai-search.service.test.js dist/middlewares/sanitize.test.js dist/validators/auth.validator.test.js dist/controllers/auth.controller.test.js",
+    "test": "NODE_ENV=test JWT_SECRET=test-only-jwt-secret-at-least-32-characters npm run build && NODE_ENV=test JWT_SECRET=test-only-jwt-secret-at-least-32-characters node --test dist/services/scoring.service.test.js dist/services/xai-search.service.test.js dist/services/research-scheduler.service.test.js dist/middlewares/sanitize.test.js dist/validators/auth.validator.test.js dist/controllers/auth.controller.test.js",
     "seed": "tsx src/scripts/seed.ts"
   },
   "dependencies": {
