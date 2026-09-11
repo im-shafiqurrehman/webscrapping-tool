@@ -89,6 +89,7 @@ const businessSchema = new Schema(
     recommendedServices: [{ type: String }],
     mainOpportunity: String,
     researchedAt: Date,
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     lastUpdatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },
   options,
@@ -96,6 +97,7 @@ const businessSchema = new Schema(
 businessSchema.index({ name: 'text', city: 'text', area: 'text', notes: 'text' });
 businessSchema.index({ 'scores.clientScore': -1, priority: 1 });
 businessSchema.index({ niche: 1, city: 1, 'scores.clientScore': -1 });
+businessSchema.index({ createdBy: 1, createdAt: -1 });
 
 const auditSchema = new Schema(
   {

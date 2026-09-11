@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui';
-import { demoMode } from '@/lib/api';
 import { useAuth } from './auth-provider';
 
 export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
@@ -87,7 +86,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
                 type="email"
                 autoComplete="email"
                 required
-                placeholder={!signup && demoMode ? 'admin@northstar.local' : 'you@company.com'}
+                placeholder="you@company.com"
                 className="h-11 w-full rounded-xl border px-3 text-xs outline-none focus:ring-2 focus:ring-brand/15"
               />
             </Field>
@@ -96,7 +95,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
                 name="password"
                 show={show}
                 onToggle={() => setShow((current) => !current)}
-                placeholder={!signup && demoMode ? 'Northstar123!' : 'Enter your password'}
+                placeholder="Enter your password"
                 signup={signup}
               />
             </Field>
@@ -151,12 +150,6 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
               {signup ? 'Sign in' : 'Create an account'}
             </Link>
           </p>
-          {demoMode && (
-            <p className="mt-4 text-center text-[9px] leading-4 text-slate-400">
-              Demo accounts stay in this browser. Set NEXT_PUBLIC_DEMO_MODE=false to use MongoDB
-              authentication through the Express API.
-            </p>
-          )}
         </div>
       </section>
       <MarketingPanel signup={signup} />

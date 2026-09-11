@@ -16,26 +16,7 @@ interface NotificationContextValue {
   markAllRead: () => void;
 }
 
-const initialNotifications: AppNotification[] = [
-  {
-    id: 'reply',
-    title: 'Valley Smile Studio replied',
-    detail: '24 minutes ago',
-    href: '/pipeline',
-  },
-  {
-    id: 'meeting',
-    title: 'Orchard Auto Care booked a meeting',
-    detail: '1 hour ago',
-    href: '/pipeline',
-  },
-  {
-    id: 'audit',
-    title: 'Cedar & Stone audit was updated',
-    detail: 'Yesterday',
-    href: '/businesses/prospect-2',
-  },
-];
+const initialNotifications: AppNotification[] = [];
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
 

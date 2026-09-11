@@ -20,6 +20,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Button, Card, PageHeader, SectionTitle } from './ui';
 import { useNotifications } from './notification-provider';
 import { useMarkets, type NewMarket } from './market-provider';
+import { useAuth } from './auth-provider';
 
 const initialWeights = {
   'Revenue & budget': 20,
@@ -32,6 +33,7 @@ const initialWeights = {
 };
 export function SettingsPage({ initialTab = 'Scoring' }: { initialTab?: string }) {
   const { notify } = useNotifications();
+  const { user } = useAuth();
   const { activeMarket, addMarket, markets, selectMarket } = useMarkets();
   const [tab, setTab] = useState(initialTab);
   const [marketDialogOpen, setMarketDialogOpen] = useState(false);
@@ -141,11 +143,12 @@ export function SettingsPage({ initialTab = 'Scoring' }: { initialTab?: string }
                 subtitle="Role-based access is enforced again in the API"
               />
               <div className="mt-5 divide-y rounded-xl border">
-                {[
-                  ['Shafiq Rehman', 'shafiq@example.com', 'Admin', 'SR'],
-                  ['Maya Chen', 'maya@example.com', 'Researcher', 'MC'],
-                  ['Alex Morgan', 'alex@example.com', 'Sales User', 'AM'],
-                ].map(([name, email, role, initials]) => (
+                {user && [[
+                  user.name,
+                  user.email,
+                  user.role,
+                  user.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase(),
+                ]].map(([name, email, role, initials]) => (
                   <div key={email} className="flex items-center gap-3 p-4">
                     <span className="flex h-9 w-9 items-center justify-center rounded-full bg-mint text-[10px] font-bold text-brand">
                       {initials}

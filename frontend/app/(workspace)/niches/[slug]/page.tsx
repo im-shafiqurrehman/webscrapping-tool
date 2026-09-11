@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { NicheDetail } from '@/components/niche-detail';
-import { nicheRows, nicheSlug } from '@/lib/demo-data';
+import { nicheRows, nicheSlug } from '@/lib/business-types';
 
 export function generateStaticParams() {
   return nicheRows.map((niche) => ({ slug: nicheSlug(niche.name) }));

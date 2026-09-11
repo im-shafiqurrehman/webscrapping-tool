@@ -19,8 +19,7 @@ import {
   Sparkles,
   Star,
 } from 'lucide-react';
-import type { DemoBusiness } from '@/lib/demo-data';
-import { demoMode } from '@/lib/api';
+import type { BusinessRecord } from '@/lib/business-types';
 import { gmailComposeUrl } from '@/lib/gmail';
 import {
   Avatar,
@@ -45,7 +44,7 @@ const tabs = [
   'Outreach',
   'Notes',
 ];
-export function BusinessDetail({ business }: { business: DemoBusiness }) {
+export function BusinessDetail({ business }: { business: BusinessRecord }) {
   const { notify } = useNotifications();
   const [tab, setTab] = useState('Overview');
   const [saved, setSaved] = useState(false);
@@ -61,18 +60,6 @@ export function BusinessDetail({ business }: { business: DemoBusiness }) {
           </Button>
         }
       />
-      {demoMode && (
-        <div className="mb-4 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
-          <CircleAlert size={18} className="mt-0.5 shrink-0" />
-          <div>
-            <p className="text-xs font-bold">Illustrative demo record — not a real prospect</p>
-            <p className="mt-1 text-[10px] leading-4 text-amber-800">
-              The name, contact details, reviews, audit observations, and scores are synthetic.
-              Do not use them for outreach or business decisions.
-            </p>
-          </div>
-        </div>
-      )}
       <Card className="mb-4 p-5">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center">
           <div className="flex min-w-0 items-center gap-4">
@@ -94,7 +81,7 @@ export function BusinessDetail({ business }: { business: DemoBusiness }) {
                   className="flex items-center gap-1 hover:text-brand"
                 >
                   <Globe2 size={12} />
-                  {demoMode ? 'Demo website' : 'Website'} <ExternalLink size={10} />
+                  Website <ExternalLink size={10} />
                 </a>
                 <span className="flex items-center gap-1">
                   <Phone size={12} />
@@ -178,7 +165,7 @@ function Summary({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function Overview({ business, onTab }: { business: DemoBusiness; onTab: (s: string) => void }) {
+function Overview({ business, onTab }: { business: BusinessRecord; onTab: (s: string) => void }) {
   return (
     <div className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
       <div className="space-y-4">
@@ -309,16 +296,16 @@ function Overview({ business, onTab }: { business: DemoBusiness; onTab: (s: stri
           <div className="mt-4 space-y-2">
             {[
               {
-                label: demoMode ? 'Illustrative website' : 'Official website',
+                label: 'Official website',
                 url: business.website,
               },
               {
-                label: demoMode ? 'Demo profile search' : 'Public business profile',
+                label: 'Public business profile',
                 url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${business.name} ${business.city}`)}`,
               },
               business.sourceCount > 2
                 ? {
-                    label: demoMode ? 'Demo directory search' : 'Public directory',
+                    label: 'Public directory',
                     url: `https://www.google.com/search?q=${encodeURIComponent(`"${business.name}" ${business.city}`)}`,
                   }
                 : null,
@@ -335,11 +322,6 @@ function Overview({ business, onTab }: { business: DemoBusiness; onTab: (s: stri
                   <FileText size={14} className="text-slate-400" />
                   <span className="min-w-0 flex-1">
                     <span className="block">{source.label}</span>
-                    {demoMode && (
-                      <span className="mt-0.5 block text-[9px] font-normal text-amber-700">
-                        Illustrative only — not verified evidence
-                      </span>
-                    )}
                   </span>
                   <ExternalLink size={12} className="text-slate-400" />
                 </a>
@@ -438,7 +420,7 @@ function AuditPanel({
   saved,
 }: {
   type: string;
-  business: DemoBusiness;
+  business: BusinessRecord;
   onSave: () => void;
   saved: boolean;
 }) {
@@ -535,7 +517,7 @@ function AuditPanel({
   );
 }
 
-function Scoring({ business }: { business: DemoBusiness }) {
+function Scoring({ business }: { business: BusinessRecord }) {
   const values = [
     ['Revenue & budget potential', 18, 20],
     ['SEO opportunity', business.seoOpportunity * 2, 20],
@@ -579,7 +561,7 @@ function Scoring({ business }: { business: DemoBusiness }) {
     </div>
   );
 }
-function Research({ business }: { business: DemoBusiness }) {
+function Research({ business }: { business: BusinessRecord }) {
   return (
     <Card className="p-5">
       <h3 className="text-sm font-bold">Research record</h3>
@@ -606,7 +588,7 @@ function Research({ business }: { business: DemoBusiness }) {
     </Card>
   );
 }
-function Outreach({ business }: { business: DemoBusiness }) {
+function Outreach({ business }: { business: BusinessRecord }) {
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const body = `Hi ${business.name} team — while reviewing ${business.niche.toLowerCase()} businesses in San Jose, I noticed ${business.mainOpportunity.toLowerCase()}. I put together a short audit with three practical ideas that may help. Would it be useful if I sent it over?`;

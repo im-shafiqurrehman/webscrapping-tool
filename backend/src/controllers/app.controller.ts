@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { Types } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
@@ -30,7 +31,7 @@ import {
   researchSchedulePatch,
 } from '../validators/research.validator.js';
 import type { AuthRequest } from '../middlewares/auth.js';
-import { searchBusinessesWithXai } from '../services/xai-search.service.js';
+import { searchBusinesses } from '../services/research-provider.service.js';
 import {
   isValidCronAuthorization,
   nextDailyRun,
@@ -38,6 +39,7 @@ import {
 } from '../services/research-scheduler.service.js';
 
 const id = (req: Request) => req.params.id as string;
+const ownerFilter = (req: AuthRequest) => ({ createdBy: req.user?.id });
 const logActivity = (req: AuthRequest, action: string, entityType: string, entityId?: unknown) =>
   Activity.create({ actor: req.user?.id, action, entityType, entityId, ip: req.ip }).catch(
     () => undefined,
@@ -93,12 +95,14 @@ export async function currentUser(req: AuthRequest, res: Response) {
   res.json({ user: publicUser(user) });
 }
 
-export async function listBusinesses(req: Request, res: Response) {
-  res.json(await findBusinesses(businessQuery.parse(req.query)));
+export async function listBusinesses(req: AuthRequest, res: Response) {
+  res.json(await findBusinesses(businessQuery.parse(req.query), String(req.user?.id)));
 }
 
-export async function getBusiness(req: Request, res: Response) {
-  const business = await Business.findById(id(req)).populate('industry niche tags').lean();
+export async function getBusiness(req: AuthRequest, res: Response) {
+  const business = await Business.findOne({ _id: id(req), ...ownerFilter(req) })
+    .populate('industry niche tags')
+    .lean();
   if (!business) throw new AppError(404, 'Business not found');
   const [audits, lead, outreach] = await Promise.all([
     Audit.find({ business: business._id }).lean(),
@@ -142,6 +146,7 @@ export async function createBusiness(req: AuthRequest, res: Response) {
   const business = await Business.create({
     ...payload,
     ...derivedFields(payload),
+    createdBy: req.user?.id,
     lastUpdatedBy: req.user?.id,
   });
   await Lead.create({ business: business._id, status: 'New Lead' });
@@ -152,12 +157,12 @@ export async function createBusiness(req: AuthRequest, res: Response) {
 export async function updateBusiness(req: AuthRequest, res: Response) {
   const payload = businessPatch.parse(req.body);
   const full = businessInput.safeParse({
-    ...(await Business.findById(id(req)).lean()),
+    ...(await Business.findOne({ _id: id(req), ...ownerFilter(req) }).lean()),
     ...payload,
   });
   const derived = full.success ? derivedFields(full.data) : {};
-  const business = await Business.findByIdAndUpdate(
-    id(req),
+  const business = await Business.findOneAndUpdate(
+    { _id: id(req), ...ownerFilter(req) },
     { ...payload, ...derived, lastUpdatedBy: req.user?.id },
     { new: true, runValidators: true },
   );
@@ -167,7 +172,7 @@ export async function updateBusiness(req: AuthRequest, res: Response) {
 }
 
 export async function deleteBusiness(req: AuthRequest, res: Response) {
-  const business = await Business.findByIdAndDelete(id(req));
+  const business = await Business.findOneAndDelete({ _id: id(req), ...ownerFilter(req) });
   if (!business) throw new AppError(404, 'Business not found');
   await Promise.all([
     Audit.deleteMany({ business: business._id }),
@@ -183,14 +188,22 @@ export async function importBusinesses(req: AuthRequest, res: Response) {
     throw new AppError(422, 'Import must contain 1–1,000 records');
   const records = req.body.map((row) => businessInput.parse(row));
   const operations = records.map((payload) => ({
-    insertOne: { document: { ...payload, ...derivedFields(payload), lastUpdatedBy: req.user?.id } },
+    insertOne: {
+      document: {
+        ...payload,
+        ...derivedFields(payload),
+        createdBy: req.user?.id,
+        lastUpdatedBy: req.user?.id,
+      },
+    },
   }));
   const result = await Business.bulkWrite(operations, { ordered: false });
   void logActivity(req, 'business.imported', 'Business');
   res.status(201).json({ imported: result.insertedCount });
 }
 
-export async function listNiches(_req: Request, res: Response) {
+export async function listNiches(req: AuthRequest, res: Response) {
+  const createdBy = new Types.ObjectId(req.user?.id);
   const niches = await Niche.aggregate([
     {
       $lookup: {
@@ -200,7 +213,25 @@ export async function listNiches(_req: Request, res: Response) {
         as: 'industryDoc',
       },
     },
-    { $lookup: { from: 'businesses', localField: '_id', foreignField: 'niche', as: 'businesses' } },
+    {
+      $lookup: {
+        from: 'businesses',
+        let: { nicheId: '$_id' },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ['$niche', '$$nicheId'] },
+                  { $eq: ['$createdBy', createdBy] },
+                ],
+              },
+            },
+          },
+        ],
+        as: 'businesses',
+      },
+    },
     {
       $addFields: {
         industryName: { $first: '$industryDoc.name' },
@@ -226,9 +257,14 @@ export async function createNiche(req: Request, res: Response) {
   res.status(201).json(await Niche.create({ name, industry, description }));
 }
 
-export async function nicheStats(req: Request, res: Response) {
+export async function nicheStats(req: AuthRequest, res: Response) {
   const stats = await Business.aggregate([
-    { $match: { niche: new (await import('mongoose')).Types.ObjectId(id(req)) } },
+    {
+      $match: {
+        niche: new Types.ObjectId(id(req)),
+        createdBy: new Types.ObjectId(req.user?.id),
+      },
+    },
     {
       $group: {
         _id: '$niche',
@@ -274,20 +310,27 @@ export async function saveAudit(req: AuthRequest, res: Response) {
     Number(score) > 10
   )
     throw new AppError(422, 'Valid business, type, and score are required');
+  const ownedBusiness = await Business.exists({ _id: business, ...ownerFilter(req) });
+  if (!ownedBusiness) throw new AppError(404, 'Business not found');
   const audit = await Audit.findOneAndUpdate(
     { business, type },
     { score, checks, notes, evidenceUrls, observedAt: new Date(), observedBy: req.user?.id },
     { upsert: true, new: true, runValidators: true },
   );
   const scoreKey = type === 'gbp' ? 'googleBusiness' : type;
-  await Business.findByIdAndUpdate(business, { [`scores.${scoreKey}`]: score });
+  await Business.findOneAndUpdate(
+    { _id: business, ...ownerFilter(req) },
+    { [`scores.${scoreKey}`]: score },
+  );
   void logActivity(req, 'audit.saved', 'Audit', audit._id);
   res.status(201).json(audit);
 }
 
 export async function recalculateScores(req: AuthRequest, res: Response) {
   const businesses = await Business.find(
-    req.body?.businessIds ? { _id: { $in: req.body.businessIds } } : {},
+    req.body?.businessIds
+      ? { _id: { $in: req.body.businessIds }, ...ownerFilter(req) }
+      : ownerFilter(req),
   );
   for (const business of businesses) {
     const scores = business.scores as unknown as {
@@ -320,10 +363,10 @@ export async function recalculateScores(req: AuthRequest, res: Response) {
   res.json({ updated: businesses.length });
 }
 
-export async function topProspects(req: Request, res: Response) {
+export async function topProspects(req: AuthRequest, res: Response) {
   const limit = Math.min(Number(req.query.limit) || 20, 100);
   res.json({
-    data: await Business.find()
+    data: await Business.find(ownerFilter(req))
       .populate('industry niche', 'name')
       .sort({ 'scores.clientScore': -1 })
       .limit(limit)
@@ -331,9 +374,12 @@ export async function topProspects(req: Request, res: Response) {
   });
 }
 
-export async function dashboard(_req: Request, res: Response) {
+export async function dashboard(req: AuthRequest, res: Response) {
+  const owner = new Types.ObjectId(req.user?.id);
+  const ownedMatch = { $match: { createdBy: owner } };
   const [totals, topProspects, leadsByNiche, pipeline, distribution, added] = await Promise.all([
     Business.aggregate([
+      ownedMatch,
       {
         $group: {
           _id: null,
@@ -357,12 +403,13 @@ export async function dashboard(_req: Request, res: Response) {
         },
       },
     ]),
-    Business.find()
+    Business.find(ownerFilter(req))
       .populate('industry niche', 'name')
       .sort({ 'scores.clientScore': -1 })
       .limit(10)
       .lean(),
     Business.aggregate([
+      ownedMatch,
       { $group: { _id: '$niche', leads: { $sum: 1 }, score: { $avg: '$scores.clientScore' } } },
       { $sort: { leads: -1 } },
       { $limit: 8 },
@@ -370,10 +417,12 @@ export async function dashboard(_req: Request, res: Response) {
       { $project: { name: { $first: '$niche.name' }, leads: 1, score: { $round: ['$score', 0] } } },
     ]),
     Business.aggregate([
+      ownedMatch,
       { $group: { _id: '$status', count: { $sum: 1 } } },
       { $project: { stage: '$_id', count: 1, _id: 0 } },
     ]),
     Business.aggregate([
+      ownedMatch,
       {
         $bucket: {
           groupBy: '$scores.clientScore',
@@ -384,6 +433,7 @@ export async function dashboard(_req: Request, res: Response) {
       },
     ]),
     Business.aggregate([
+      ownedMatch,
       {
         $group: {
           _id: { $dateToString: { date: '$createdAt', format: '%Y-%m' } },
@@ -418,7 +468,7 @@ export async function createResearch(req: AuthRequest, res: Response) {
 
 export async function liveResearch(req: AuthRequest, res: Response) {
   const input = liveResearchInput.parse(req.body);
-  const results = await searchBusinessesWithXai(input);
+  const results = await searchBusinesses(input);
   void logActivity(req, 'research.live_search', 'ResearchRun');
   res.json(results);
 }
@@ -506,14 +556,21 @@ export async function listResearchCandidates(req: AuthRequest, res: Response) {
   res.json({ data: candidates });
 }
 
-export async function getResearch(req: Request, res: Response) {
-  const run = await ResearchRun.findById(id(req)).populate('industry niche', 'name').lean();
+export async function getResearch(req: AuthRequest, res: Response) {
+  const run = await ResearchRun.findOne({ _id: id(req), createdBy: req.user?.id })
+    .populate('industry niche', 'name')
+    .lean();
   if (!run) throw new AppError(404, 'Research run not found');
   res.json(run);
 }
 
 export async function generateOutreach(req: AuthRequest, res: Response) {
-  const business = await Business.findById(req.body.businessId).populate('niche', 'name').lean();
+  const business = await Business.findOne({
+    _id: req.body.businessId,
+    ...ownerFilter(req),
+  })
+    .populate('niche', 'name')
+    .lean();
   if (!business) throw new AppError(404, 'Business not found');
   const scores = business.scores as unknown as {
     website: number;
@@ -543,19 +600,24 @@ export async function generateOutreach(req: AuthRequest, res: Response) {
 }
 
 export async function updateLead(req: AuthRequest, res: Response) {
+  const business = await Business.findOne({ _id: id(req), ...ownerFilter(req) });
+  if (!business) throw new AppError(404, 'Business not found');
   const lead = await Lead.findOneAndUpdate({ business: id(req) }, req.body, {
     new: true,
     upsert: true,
     runValidators: true,
   });
-  await Business.findByIdAndUpdate(id(req), { status: req.body.status });
+  business.status = req.body.status;
+  await business.save();
   void logActivity(req, 'lead.updated', 'Lead', lead._id);
   res.json(lead);
 }
 
-export async function marketReport(_req: Request, res: Response) {
+export async function marketReport(req: AuthRequest, res: Response) {
+  const owner = new Types.ObjectId(req.user?.id);
   const [niches, top] = await Promise.all([
     Business.aggregate([
+      { $match: { createdBy: owner } },
       {
         $group: {
           _id: '$niche',
@@ -578,7 +640,11 @@ export async function marketReport(_req: Request, res: Response) {
         },
       },
     ]),
-    Business.find().populate('niche', 'name').sort({ 'scores.clientScore': -1 }).limit(20).lean(),
+    Business.find(ownerFilter(req))
+      .populate('niche', 'name')
+      .sort({ 'scores.clientScore': -1 })
+      .limit(20)
+      .lean(),
   ]);
   res.json({
     generatedAt: new Date(),

@@ -29,7 +29,7 @@ Base URL: `/api`. Responses are JSON. Except for health, signup, and login, pass
 | POST             | `/scoring/recalculate`       | Recalculate one set or all businesses       |
 | GET              | `/prospects/top?limit=20`    | Top prospects (maximum 100)                 |
 | POST/GET         | `/research`, `/research/:id` | Create/read a research run                  |
-| POST             | `/research/live-search`      | Discover cited live candidates with Grok Web Search |
+| POST             | `/research/live-search`      | Discover cited live candidates with the configured provider |
 | GET/POST         | `/research/schedules`        | List or create persistent daily searches   |
 | PATCH/DELETE     | `/research/schedules/:id`    | Pause, resume, edit, or remove a schedule   |
 | GET              | `/research/jobs`             | Inspect the latest 50 durable jobs          |
@@ -58,8 +58,9 @@ Errors follow `{ "error": { "message": "…", "details": {} } }`. Missing inform
 
 ## Live business discovery
 
-`POST /research/live-search` requires an Admin or Researcher token and a server-side
-`XAI_API_KEY`. Example request:
+`POST /research/live-search` requires an Admin or Researcher token and a server-side provider key.
+`SEARCH_PROVIDER=groq` uses `GROQ_API_KEY` and Groq Compound by default. `SEARCH_PROVIDER=xai`
+remains available as an optional fallback. Example request:
 
 ```json
 {
@@ -92,6 +93,13 @@ and retain status/results for the Research screen. Candidate records are dedupli
 website domain, falling back to normalized business name plus city and country. Existing candidates
 are updated with the latest observation and their source URLs are merged.
 
-Required production variables are `CRON_SECRET`, `XAI_API_KEY`, `MONGODB_URI`, and `JWT_SECRET`.
-Optional controls are `XAI_DAILY_SEARCH_BUDGET`, `RESEARCH_JOBS_PER_CRON`, and
-`RESEARCH_JOB_MAX_ATTEMPTS`. The budget is reserved atomically per UTC day, including retries.
+Required production variables are `CRON_SECRET`, `SEARCH_PROVIDER`, the selected provider key,
+`MONGODB_URI`, and `JWT_SECRET`. Groq uses `GROQ_API_KEY`, `GROQ_MODEL`, and
+`GROQ_DAILY_SEARCH_BUDGET`. Optional worker controls are `RESEARCH_JOBS_PER_CRON` and
+`RESEARCH_JOB_MAX_ATTEMPTS`. The selected provider's budget is reserved atomically per UTC day,
+including retries.
+
+Groq responses are schema-validated and passed through an evidence gate. A candidate is retained
+only when at least one claimed source URL matches a URL in Groq's executed web-search or
+visit-website output. Results are still candidates requiring human review; the gate proves that a
+page was returned by the provider, not that every statement on that page is accurate or current.

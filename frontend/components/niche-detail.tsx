@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight, BriefcaseBusiness, Search, Sparkles, Target } from 'lucide-react';
-import { businesses, nicheRows, nicheSlug } from '@/lib/demo-data';
+import { businesses, nicheRows, nicheSlug } from '@/lib/business-types';
 import { Avatar, Card, PageHeader, Progress, ScoreRing, SectionTitle } from './ui';
 
 export function NicheDetail({ slug }: { slug: string }) {

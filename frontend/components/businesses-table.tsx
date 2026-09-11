@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   Check,
@@ -13,16 +14,16 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
-  Tag,
   Trash2,
   X,
 } from 'lucide-react';
-import { businesses as initialBusinesses, type DemoBusiness } from '@/lib/demo-data';
+import type { BusinessRecord } from '@/lib/business-types';
+import { deleteBusiness, fetchBusinesses } from '@/lib/api';
 import { downloadCsv } from '@/lib/utils';
 import { Avatar, Button, Card, PageHeader, PriorityBadge, ScoreRing, StatusDot } from './ui';
 import { useNotifications } from './notification-provider';
 
-const exportRow = (b: DemoBusiness) => ({
+const exportRow = (b: BusinessRecord) => ({
   'Business Name': b.name,
   Industry: b.industry,
   'Sub-Niche': b.niche,
@@ -47,16 +48,19 @@ const exportRow = (b: DemoBusiness) => ({
 
 export function BusinessesTable() {
   const { notify } = useNotifications();
-  const [rows, setRows] = useState(initialBusinesses);
+  const { data: loadedRows = [], isLoading, error } = useQuery({
+    queryKey: ['businesses'],
+    queryFn: fetchBusinesses,
+  });
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+  const rows = loadedRows.filter((business) => !deletedIds.has(business.id));
   const [query, setQuery] = useState('');
   const [industry, setIndustry] = useState('All industries');
   const [priority, setPriority] = useState('All priorities');
   const [sort, setSort] = useState('score');
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [addOpen, setAddOpen] = useState(false);
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const [minimumScore, setMinimumScore] = useState(0);
-  const [tagged, setTagged] = useState(false);
   const filtered = useMemo(
     () =>
       rows
@@ -92,9 +96,9 @@ export function BusinessesTable() {
             >
               <Download size={15} /> Export CSV
             </Button>
-            <Button onClick={() => setAddOpen(true)}>
+            <Link href="/research" className="inline-flex h-10 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white">
               <Plus size={16} /> Add business
-            </Button>
+            </Link>
           </>
         }
       />
@@ -177,26 +181,20 @@ export function BusinessesTable() {
             <div className="flex items-center gap-2">
               <span>{selected.size} selected</span>
               <button
-                type="button"
-                onClick={() => {
-                  setRows((current) =>
-                    current.map((business) =>
-                      selected.has(business.id) && !business.tags.includes('Follow-up')
-                        ? { ...business, tags: [...business.tags, 'Follow-up'] }
-                        : business,
-                    ),
-                  );
-                  setTagged(true);
-                }}
-                className="flex items-center gap-1 font-semibold text-brand"
-              >
-                {tagged ? <Check size={13} /> : <Tag size={13} />}
-                {tagged ? 'Tagged' : 'Add tag'}
-              </button>
-              <button
-                onClick={() => {
-                  setRows((current) => current.filter((b) => !selected.has(b.id)));
-                  setSelected(new Set());
+                onClick={async () => {
+                  const ids = [...selected];
+                  try {
+                    await Promise.all(ids.map(deleteBusiness));
+                    setDeletedIds((current) => new Set([...current, ...ids]));
+                    setSelected(new Set());
+                    notify({ title: 'Businesses deleted', detail: `${ids.length} record(s) removed.`, href: '/businesses' });
+                  } catch (caught) {
+                    notify({
+                      title: 'Delete failed',
+                      detail: caught instanceof Error ? caught.message : 'Could not delete records.',
+                      href: '/businesses',
+                    });
+                  }
                 }}
                 className="flex items-center gap-1 font-semibold text-coral"
               >
@@ -296,11 +294,13 @@ export function BusinessesTable() {
               ))}
             </tbody>
           </table>
-          {!filtered.length && (
+          {!isLoading && !filtered.length && (
             <div className="p-14 text-center">
               <Filter className="mx-auto text-slate-300" />
-              <p className="mt-3 text-sm font-bold">No businesses match these filters</p>
-              <p className="mt-1 text-xs text-slate-400">Clear filters or add a new business.</p>
+              <p className="mt-3 text-sm font-bold">No business records found</p>
+              <p className="mt-1 text-xs text-slate-400">
+                {error instanceof Error ? error.message : 'Run live research or import verified records.'}
+              </p>
             </div>
           )}
         </div>
@@ -319,20 +319,6 @@ export function BusinessesTable() {
           </div>
         </div>
       </Card>
-      {addOpen && (
-        <AddBusiness
-          onClose={() => setAddOpen(false)}
-          onAdd={(business) => {
-            setRows((current) => [business, ...current]);
-            setAddOpen(false);
-            notify({
-              title: `${business.name} added`,
-              detail: 'Added to the research queue just now.',
-              href: `/businesses/${business.id}`,
-            });
-          }}
-        />
-      )}
     </>
   );
 }
@@ -397,102 +383,5 @@ function ScoreCell({ value, quality }: { value: number; quality?: boolean }) {
         </span>
       </div>
     </td>
-  );
-}
-
-function AddBusiness({
-  onClose,
-  onAdd,
-}: {
-  onClose: () => void;
-  onAdd: (business: DemoBusiness) => void;
-}) {
-  const [name, setName] = useState('');
-  const [niche, setNiche] = useState('HVAC');
-  const [area, setArea] = useState('Downtown San Jose');
-  const submit = () => {
-    if (!name.trim()) return;
-    const base = initialBusinesses[0]!;
-    onAdd({
-      ...base,
-      id: `local-${Date.now()}`,
-      name,
-      initials: name
-        .split(' ')
-        .map((x) => x[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase(),
-      niche,
-      area,
-      clientScore: 0,
-      priority: 'Low',
-      status: 'New Lead',
-      observed: [],
-      sourceCount: 0,
-      updatedAt: 'Just now',
-    });
-  };
-  return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/35 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-2xl border bg-white p-6 shadow-2xl">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-lg font-bold">Add business</h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Start with observed public information. Unknown fields can be researched later.
-            </p>
-          </div>
-          <button onClick={onClose}>
-            <X size={20} className="text-slate-400" />
-          </button>
-        </div>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          <Field
-            label="Business name *"
-            value={name}
-            onChange={setName}
-            placeholder="Business name"
-            wide
-          />
-          <Field label="Niche" value={niche} onChange={setNiche} placeholder="e.g. HVAC" />
-          <Field label="Area" value={area} onChange={setArea} placeholder="Area" />
-          <Field label="Website" placeholder="https://" />
-          <Field label="Public phone" placeholder="(408) 555-0100" />
-          <Field label="Source URL *" placeholder="https://public-source.example" wide />
-        </div>
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={submit}>Add to research queue</Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-function Field({
-  label,
-  value,
-  onChange,
-  placeholder,
-  wide,
-}: {
-  label: string;
-  value?: string;
-  onChange?: (v: string) => void;
-  placeholder: string;
-  wide?: boolean;
-}) {
-  return (
-    <label className={wide ? 'sm:col-span-2' : ''}>
-      <span className="mb-1.5 block text-[11px] font-bold text-slate-600">{label}</span>
-      <input
-        value={value}
-        onChange={onChange ? (e) => onChange(e.target.value) : undefined}
-        className="h-10 w-full rounded-xl border px-3 text-xs outline-none focus:ring-2 focus:ring-brand/15"
-        placeholder={placeholder}
-      />
-    </label>
   );
 }

@@ -16,8 +16,8 @@ export interface BusinessQuery {
   sort?: string | undefined;
 }
 
-export async function findBusinesses(query: BusinessQuery) {
-  const filter: Record<string, unknown> = {};
+export async function findBusinesses(query: BusinessQuery, createdBy: string) {
+  const filter: Record<string, unknown> = { createdBy };
   if (query.search) filter.$text = { $search: query.search };
   if (query.industry && Types.ObjectId.isValid(query.industry)) filter.industry = query.industry;
   if (query.niche && Types.ObjectId.isValid(query.niche)) filter.niche = query.niche;

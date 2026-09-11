@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { env } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
 
-const candidateSchema = z.object({
+export const candidateSchema = z.object({
   name: z.string().min(1),
   address: z.string().nullable(),
   website: z.url().nullable(),
@@ -14,8 +14,14 @@ const candidateSchema = z.object({
   sourceUrls: z.array(z.url()).min(1),
 });
 
-const discoverySchema = z.object({ businesses: z.array(candidateSchema) });
+export const discoverySchema = z.object({ businesses: z.array(candidateSchema) });
 export type LiveResearchCandidate = z.infer<typeof candidateSchema>;
+export interface LiveResearchInput {
+  market: { city: string; region: string; country: string; area?: string | undefined };
+  industry: string;
+  niche: string;
+  limit: number;
+}
 
 interface XaiResponse {
   citations?: string[];
@@ -63,12 +69,7 @@ const outputJsonSchema = {
   required: ['businesses'],
 } as const;
 
-export async function searchBusinessesWithXai(input: {
-  market: { city: string; region: string; country: string; area?: string | undefined };
-  industry: string;
-  niche: string;
-  limit: number;
-}) {
+export async function searchBusinessesWithXai(input: LiveResearchInput) {
   if (!env.XAI_API_KEY) {
     throw new AppError(503, 'Live search is not configured. Add XAI_API_KEY on the backend.');
   }

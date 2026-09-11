@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   BarChart3,
@@ -30,10 +31,10 @@ import {
   X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { businesses, type Stage } from '@/lib/demo-data';
+import type { Stage } from '@/lib/business-types';
 import { downloadCsv } from '@/lib/utils';
 import { gmailComposeUrl } from '@/lib/gmail';
-import { demoMode } from '@/lib/api';
+import { fetchBusinesses, updatePipelineStatus } from '@/lib/api';
 import {
   Avatar,
   Button,
@@ -48,8 +49,10 @@ import {
 import { useNotifications } from './notification-provider';
 
 export function ProspectsPage() {
+  const { data: businesses = [] } = useQuery({ queryKey: ['businesses'], queryFn: fetchBusinesses });
   const [limit, setLimit] = useState(20);
   const top = businesses.slice(0, limit);
+  const best = top[0];
   const reasons: Array<[string, string, LucideIcon]> = [
     ['Strong budget fit', 'Revenue and retainer potential', CircleDollarSign],
     ['Clear digital gap', 'Observed SEO, GBP, or website need', Target],
@@ -83,35 +86,35 @@ export function ProspectsPage() {
         }
       />
       <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
-        <Card className="relative overflow-hidden bg-[#172A24] p-6 text-white">
+        {best ? <Card className="relative overflow-hidden bg-[#172A24] p-6 text-white">
           <span className="absolute right-5 top-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-[#5CD3AA]">
             <Trophy size={21} />
           </span>
           <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#5CD3AA]">
             Highest priority prospect
           </p>
-          <h2 className="mt-3 text-2xl font-bold">{top[0]!.name}</h2>
+          <h2 className="mt-3 text-2xl font-bold">{best.name}</h2>
           <p className="mt-1 text-xs text-white/50">
-            {top[0]!.niche} · {top[0]!.area}
+            {best.niche} · {best.area}
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-4">
             <div>
-              <span className="text-4xl font-extrabold">{top[0]!.clientScore}</span>
+              <span className="text-4xl font-extrabold">{best.clientScore}</span>
               <span className="text-sm text-white/40">/100</span>
             </div>
             <div className="h-9 w-px bg-white/10" />
             <div>
               <p className="text-[9px] uppercase text-white/40">Best service to offer</p>
-              <p className="mt-1 text-xs font-bold text-[#7BE0BC]">{top[0]!.recommendedService}</p>
+              <p className="mt-1 text-xs font-bold text-[#7BE0BC]">{best.recommendedService || 'Audit required'}</p>
             </div>
           </div>
           <Link
-            href={`/businesses/${top[0]!.id}`}
+            href={`/businesses/${best.id}`}
             className="mt-5 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-ink"
           >
             View opportunity <MoveRight size={14} />
           </Link>
-        </Card>
+        </Card> : <Card className="p-8 text-center"><p className="text-sm font-bold">No scored prospects yet</p><p className="mt-2 text-xs text-slate-500">Research and audit a real business to create this ranking.</p></Card>}
         <Card className="p-5">
           <SectionTitle title="Why these leads rank highest" />
           <div className="mt-5 space-y-4">
@@ -225,24 +228,37 @@ const stages: Stage[] = [
 ];
 export function PipelinePage() {
   const { notify } = useNotifications();
-  const [cards, setCards] = useState(businesses);
+  const { data: businesses = [] } = useQuery({ queryKey: ['businesses'], queryFn: fetchBusinesses });
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, Stage>>({});
+  const cards = businesses.map((business) => ({
+    ...business,
+    status: statusOverrides[business.id] ?? business.status,
+  }));
   const [drag, setDrag] = useState<string | null>(null);
   const [followupsOpen, setFollowupsOpen] = useState(false);
-  const [addLeadOpen, setAddLeadOpen] = useState(false);
   const followups = cards.filter((business) => ['Contacted', 'Follow Up'].includes(business.status));
-  const move = (stage: Stage) => {
+  const move = async (stage: Stage) => {
     if (!drag) return;
     const movedBusiness = cards.find((business) => business.id === drag);
-    setCards((c) => c.map((b) => (b.id === drag ? { ...b, status: stage } : b)));
+    const businessId = drag;
+    setStatusOverrides((current) => ({ ...current, [businessId]: stage }));
     setDrag(null);
     if (movedBusiness) {
-      notify({
-        title: `${movedBusiness.name} moved to ${stage}`,
-        detail: 'Pipeline status updated just now.',
-        href: movedBusiness.id.startsWith('prospect-')
-          ? `/businesses/${movedBusiness.id}`
-          : '/pipeline',
-      });
+      try {
+        await updatePipelineStatus(businessId, stage);
+        notify({
+          title: `${movedBusiness.name} moved to ${stage}`,
+          detail: 'Pipeline status saved.',
+          href: `/businesses/${movedBusiness.id}`,
+        });
+      } catch (caught) {
+        setStatusOverrides((current) => ({ ...current, [businessId]: movedBusiness.status }));
+        notify({
+          title: 'Pipeline update failed',
+          detail: caught instanceof Error ? caught.message : 'Could not save the new status.',
+          href: '/pipeline',
+        });
+      }
     }
   };
   return (
@@ -256,9 +272,9 @@ export function PipelinePage() {
             <Button variant="secondary" onClick={() => setFollowupsOpen(true)}>
               <Calendar size={15} /> Follow-ups
             </Button>
-            <Button onClick={() => setAddLeadOpen(true)}>
+            <Link href="/research" className="inline-flex h-10 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white">
               <Plus size={16} /> Add lead
-            </Button>
+            </Link>
           </>
         }
       />
@@ -283,7 +299,7 @@ export function PipelinePage() {
               <div
                 key={stage}
                 onDragOver={(e) => e.preventDefault()}
-                onDrop={() => move(stage)}
+                onDrop={() => void move(stage)}
                 className={`w-[270px] shrink-0 rounded-2xl border p-2 ${drag ? 'bg-emerald-50/30' : 'bg-[#EEF1ED]/60'}`}
               >
                 <div className="flex items-center justify-between px-2 py-2">
@@ -410,111 +426,10 @@ export function PipelinePage() {
           </Card>
         </div>
       )}
-      {addLeadOpen && (
-        <AddLeadDialog
-          onClose={() => setAddLeadOpen(false)}
-          onAdd={(lead) => {
-            setCards((current) => [lead, ...current]);
-            setAddLeadOpen(false);
-            notify({
-              title: `${lead.name} added`,
-              detail: 'New lead created in the pipeline.',
-              href: '/pipeline',
-            });
-          }}
-        />
-      )}
     </>
   );
 }
 
-function AddLeadDialog({
-  onClose,
-  onAdd,
-}: {
-  onClose: () => void;
-  onAdd: (lead: (typeof businesses)[number]) => void;
-}) {
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="add-lead-title"
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/35 p-4 backdrop-blur-sm"
-    >
-      <Card className="w-full max-w-md p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 id="add-lead-title" className="font-bold">Add a pipeline lead</h2>
-            <p className="mt-1 text-[11px] text-slate-500">Create a lead in the New Lead stage.</p>
-          </div>
-          <button
-            type="button"
-            aria-label="Close add lead"
-            onClick={onClose}
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-ink"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        <form
-          className="mt-5 space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const form = new FormData(event.currentTarget);
-            const name = String(form.get('name')).trim();
-            const niche = String(form.get('niche')).trim();
-            if (!name || !niche) return;
-            onAdd({
-              ...businesses.at(-1)!,
-              id: `lead-${Date.now()}`,
-              name,
-              niche,
-              initials: name
-                .split(/\s+/)
-                .map((part) => part[0])
-                .join('')
-                .slice(0, 2)
-                .toUpperCase(),
-              status: 'New Lead',
-              priority: 'Medium',
-              clientScore: 50,
-              nextAction: 'Review lead and begin research',
-              updatedAt: 'Just now',
-              email: String(form.get('email')).trim() || undefined,
-            });
-          }}
-        >
-          <input
-            name="name"
-            required
-            aria-label="Lead name"
-            placeholder="Business name"
-            className="h-11 w-full rounded-xl border px-3 text-xs outline-none focus:ring-2 focus:ring-brand/15"
-          />
-          <input
-            name="niche"
-            required
-            aria-label="Lead niche"
-            placeholder="Niche, e.g. HVAC"
-            className="h-11 w-full rounded-xl border px-3 text-xs outline-none focus:ring-2 focus:ring-brand/15"
-          />
-          <input
-            name="email"
-            type="email"
-            aria-label="Lead email"
-            placeholder="Public email (optional)"
-            className="h-11 w-full rounded-xl border px-3 text-xs outline-none focus:ring-2 focus:ring-brand/15"
-          />
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-            <Button type="submit"><Plus size={15} /> Create lead</Button>
-          </div>
-        </form>
-      </Card>
-    </div>
-  );
-}
 function PipelineMetric({
   label,
   value,
@@ -539,13 +454,29 @@ function PipelineMetric({
 
 export function OutreachPage() {
   const { notify } = useNotifications();
-  const [selected, setSelected] = useState(businesses[0]!.id);
+  const { data: businesses = [] } = useQuery({ queryKey: ['businesses'], queryFn: fetchBusinesses });
+  const [selected, setSelected] = useState(businesses[0]?.id ?? '');
   const [type, setType] = useState('Cold email');
   const [generated, setGenerated] = useState(false);
   const [copied, setCopied] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
   const [completed, setCompleted] = useState(false);
-  const business = businesses.find((b) => b.id === selected)!;
+  const business = businesses.find((b) => b.id === selected) ?? businesses[0];
+  if (!business) {
+    return (
+      <>
+        <PageHeader
+          eyebrow="Evidence-based messaging"
+          title="Outreach studio"
+          description="Turn verified audit findings into short, useful messages."
+        />
+        <Card className="p-8 text-center">
+          <p className="text-sm font-bold">No verified prospect is ready for outreach</p>
+          <p className="mt-2 text-xs text-slate-500">Add and audit a real business record first.</p>
+        </Card>
+      </>
+    );
+  }
   const messageTypes: Array<[string, LucideIcon]> = [
     ['Cold email', Mail],
     ['LinkedIn message', MessageSquareText],
@@ -578,12 +509,6 @@ export function OutreachPage() {
         title="Outreach studio"
         description="Turn verified audit findings into short, useful messages—without invented claims or generic spam."
       />
-      {demoMode && (
-        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
-          <strong>Demo outreach:</strong> recipients and audit claims are synthetic. Use imported,
-          verified records before sending any email.
-        </div>
-      )}
       <div className="grid gap-4 xl:grid-cols-[.8fr_1.35fr]">
         <div className="space-y-4">
           <Card className="p-5">
@@ -801,7 +726,9 @@ export function OutreachPage() {
 }
 
 export function ReportsPage() {
+  const { data: businesses = [] } = useQuery({ queryKey: ['businesses'], queryFn: fetchBusinesses });
   const [generated, setGenerated] = useState<string | null>(null);
+  const best = businesses[0];
   const reports: Array<[string, string, LucideIcon]> = [
     ['Market report', 'Best niches, common weaknesses, and opportunity landscape', BarChart3],
     ['Prospect report', 'Top 100 list and detailed Top 20 recommendations', Target],
@@ -853,7 +780,7 @@ export function ReportsPage() {
                 Live recommendation
               </p>
               <h2 className="mt-2 text-xl font-bold">
-                Start with HVAC and high-value home services
+                {best ? `Start with ${best.niche}` : 'No recommendation available yet'}
               </h2>
             </div>
             <span className="rounded-xl bg-emerald-50 p-3 text-brand">
@@ -861,23 +788,23 @@ export function ReportsPage() {
             </span>
           </div>
           <p className="mt-3 text-xs leading-6 text-slate-500">
-            The current sample ranks HVAC first based on an average client score of{' '}
-            {businesses.filter((b) => b.niche === 'HVAC')[0]!.clientScore}/100, strong SEO
-            opportunity, and retainer fit. The sample is small, so this is a prospect-level
-            direction—not a claim about the entire San Jose market.
+            {best
+              ? `The highest stored client score is ${best.clientScore}/100 for ${best.name}. This is a prospect-level direction, not a claim about the wider market.`
+              : 'Research and audit real businesses before generating a market recommendation.'}
           </p>
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <ReportFact label="Recommended niche" value="HVAC" note="1 business analyzed" />
-            <ReportFact label="Primary offer" value="Local SEO" note="Plus GBP optimization" />
-            <ReportFact label="Entry offer" value="Free local audit" note="3 prioritized fixes" />
+            <ReportFact label="Recommended niche" value={best?.niche || 'Unavailable'} note={`${businesses.length} business records`} />
+            <ReportFact label="Primary offer" value={best?.recommendedService || 'Audit required'} note="Based on stored scores" />
+            <ReportFact label="Main opportunity" value={best?.mainOpportunity || 'Audit required'} note="Review evidence before outreach" />
           </div>
           <div className="mt-5 rounded-xl bg-[#172A24] p-5 text-white">
             <p className="text-[9px] font-bold uppercase tracking-wider text-[#61D2AB]">
               Suggested outreach angle
             </p>
             <p className="mt-2 text-sm leading-6">
-              “We found a few ways your business could become easier to discover in local search and
-              Google Maps. May I send over a three-point audit?”
+              {best
+                ? `We reviewed the public evidence saved for ${best.name} and prepared a short audit. May I send it over?`
+                : 'No outreach angle can be generated without a verified business and retained evidence.'}
             </p>
             <p className="mt-2 text-[9px] text-white/40">
               Uses stored visibility observations; no ranking claim is asserted.
@@ -893,9 +820,10 @@ export function ReportsPage() {
                 [
                   'Excellent opportunities',
                   businesses.filter((b) => b.priority === 'Excellent').length,
-                  (businesses.filter((b) => b.priority === 'Excellent').length /
-                    businesses.length) *
-                    100,
+                  businesses.length
+                    ? (businesses.filter((b) => b.priority === 'Excellent').length /
+                        businesses.length) * 100
+                    : 0,
                 ],
                 [
                   'With public contact path',
@@ -922,7 +850,7 @@ export function ReportsPage() {
                   Directional, not market-representative
                 </p>
                 <p className="mt-1 text-[10px] leading-4 text-amber-800/70">
-                  This demo has {businesses.length} illustrative records. Niche-wide gap percentages
+                  This report contains {businesses.length} stored records. Niche-wide gap percentages
                   remain gated until each niche reaches the required sample.
                 </p>
               </div>
@@ -930,53 +858,6 @@ export function ReportsPage() {
           </Card>
         </div>
       </div>
-      <Card className="mt-4 p-5">
-        <SectionTitle
-          title="Service opportunity dashboard"
-          subtitle="Editable planning assumptions, separate from observed prospect data"
-        />
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[800px] text-left">
-            <thead>
-              <tr className="border-y bg-slate-50 text-[9px] uppercase tracking-wider text-slate-400">
-                <th className="px-3 py-3">Service</th>
-                <th>Demand</th>
-                <th>Competition</th>
-                <th>Delivery difficulty</th>
-                <th>Client value</th>
-                <th>Profitability</th>
-                <th>Recommendation</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {[
-                ['Local SEO', 9, 7, 6, 9, 9, 'Primary'],
-                ['GBP Optimization', 9, 6, 4, 8, 9, 'Entry offer'],
-                ['Website Optimization', 7, 7, 7, 8, 7, 'Secondary'],
-                ['Content Marketing', 6, 8, 8, 8, 6, 'Upsell'],
-                ['Social Media', 7, 9, 8, 6, 5, 'Selective'],
-              ].map((row) => (
-                <tr className="text-[11px]" key={String(row[0])}>
-                  <td className="px-3 py-3 font-bold">{row[0]}</td>
-                  {row.slice(1, 6).map((v, i) => (
-                    <td key={i}>
-                      <span className="font-bold">{v}</span>
-                      <span className="text-[9px] text-slate-400">/10</span>
-                    </td>
-                  ))}
-                  <td>
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-[9px] font-bold ${row[6] === 'Primary' ? 'bg-emerald-50 text-brand' : 'bg-slate-100 text-slate-600'}`}
-                    >
-                      {row[6]}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
       {generated && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/35 p-4 backdrop-blur-sm">
           <Card className="w-full max-w-md p-6 text-center">
@@ -985,7 +866,7 @@ export function ReportsPage() {
             </span>
             <h3 className="mt-4 text-lg font-bold">{generated} is ready</h3>
             <p className="mt-2 text-xs leading-5 text-slate-500">
-              Generated from {businesses.length} stored demo records with sample-size caveats
+              Generated from {businesses.length} stored records with sample-size caveats
               preserved.
             </p>
             <div className="mt-5 flex justify-center gap-2">

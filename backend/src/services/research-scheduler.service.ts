@@ -1,7 +1,8 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { env } from '../config/env.js';
 import { ProviderUsage, ResearchCandidate, ResearchJob, ResearchSchedule } from '../models/index.js';
-import { searchBusinessesWithXai, type LiveResearchCandidate } from './xai-search.service.js';
+import type { LiveResearchCandidate } from './xai-search.service.js';
+import { activeResearchProvider, searchBusinesses } from './research-provider.service.js';
 
 export function isValidCronAuthorization(value: string | undefined, secret: string) {
   const supplied = value ?? '';
@@ -64,18 +65,19 @@ export async function enqueueDueResearchSchedules(now = new Date()) {
 }
 
 async function reserveProviderCall(now: Date) {
+  const provider = activeResearchProvider();
   const utcDay = now.toISOString().slice(0, 10);
-  const key = `xai:${utcDay}`;
+  const key = `${provider.id}:${utcDay}`;
   const incrementExisting = () =>
     ProviderUsage.findOneAndUpdate(
-      { key, used: { $lt: env.XAI_DAILY_SEARCH_BUDGET } },
+      { key, used: { $lt: provider.dailyBudget } },
       { $inc: { used: 1 } },
       { new: true },
     );
   const existing = await incrementExisting();
   if (existing) return existing.used;
   try {
-    const usage = await ProviderUsage.create({ key, provider: 'xai', utcDay, used: 1 });
+    const usage = await ProviderUsage.create({ key, provider: provider.id, utcDay, used: 1 });
     return usage.used;
   } catch (error) {
     if ((error as { code?: number }).code === 11000) {
@@ -173,7 +175,7 @@ async function processOneJob(now: Date) {
       industry: schedule.industry,
       niche: schedule.niche,
     };
-    const result = await searchBusinessesWithXai({
+    const result = await searchBusinesses({
       ...scope,
       limit: schedule.limit,
     });
@@ -212,20 +214,25 @@ async function processOneJob(now: Date) {
 }
 
 export async function runDailyResearchCron(now = new Date()) {
+  const provider = activeResearchProvider();
   const enqueued = await enqueueDueResearchSchedules(now);
+  // Compound requests are token-heavy. One-at-a-time execution avoids exhausting the free TPM
+  // allowance and leaves rate-limited jobs queued for a later invocation.
+  const jobsThisInvocation = provider.id === 'groq' ? 1 : env.RESEARCH_JOBS_PER_CRON;
   const processed = (await Promise.all(
-    Array.from({ length: env.RESEARCH_JOBS_PER_CRON }, () => processOneJob(new Date())),
+    Array.from({ length: jobsThisInvocation }, () => processOneJob(new Date())),
   )).filter((result) => result !== null);
   const utcDay = now.toISOString().slice(0, 10);
-  const usage = await ProviderUsage.findOne({ key: `xai:${utcDay}` }).lean();
+  const usage = await ProviderUsage.findOne({ key: `${provider.id}:${utcDay}` }).lean();
   const used = usage?.used ?? 0;
   return {
     enqueued,
     processed,
     budget: {
-      limit: env.XAI_DAILY_SEARCH_BUDGET,
+      provider: provider.id,
+      limit: provider.dailyBudget,
       used,
-      remaining: Math.max(0, env.XAI_DAILY_SEARCH_BUDGET - used),
+      remaining: Math.max(0, provider.dailyBudget - used),
     },
   };
 }

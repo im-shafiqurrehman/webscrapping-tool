@@ -1,10 +1,6 @@
-import { dashboardData } from './demo-data';
-
-export const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== 'false';
-const apiBase = process.env.NEXT_PUBLIC_API_URL ?? '/backend';
+const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
 export const authTokenKey = 'northstar_token';
 export const authUserKey = 'northstar_user';
-const demoUsersKey = 'northstar_demo_users';
 
 export interface AuthUser {
   id: string;
@@ -18,13 +14,114 @@ export interface AuthSession {
   user: AuthUser;
 }
 
-interface DemoUser extends AuthUser {
-  passwordDigest: string;
-}
-
 function storedToken() {
   if (typeof window === 'undefined') return null;
   return window.sessionStorage.getItem(authTokenKey) ?? window.localStorage.getItem(authTokenKey);
+}
+
+interface ApiBusiness {
+  _id: string;
+  name: string;
+  industry?: { name?: string } | string;
+  niche?: { name?: string } | string;
+  city?: string;
+  area?: string;
+  address?: string;
+  website?: string;
+  phone?: string;
+  publicEmail?: string;
+  googleRating?: number;
+  googleReviews?: number;
+  yelpReviews?: number;
+  estimatedBusinessSize?: string;
+  estimatedEmployees?: number;
+  yearsInBusiness?: number;
+  services?: string[];
+  scores?: Partial<{
+    website: number;
+    seo: number;
+    googleBusiness: number;
+    social: number;
+    marketingNeed: number;
+    clientScore: number;
+  }>;
+  priority?: BusinessRecord['priority'];
+  status?: Stage;
+  recommendedServices?: string[];
+  mainOpportunity?: string;
+  tags?: Array<{ name?: string } | string>;
+  sources?: Array<{ url?: string; observedAt?: string }>;
+  updatedAt?: string;
+}
+
+const relationName = (value: ApiBusiness['industry']) =>
+  typeof value === 'string' ? value : value?.name ?? 'Unknown';
+
+function toBusinessRecord(value: ApiBusiness): BusinessRecord {
+  const initials = value.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+  return {
+    id: value._id,
+    name: value.name,
+    initials,
+    color: 'emerald',
+    industry: relationName(value.industry),
+    niche: relationName(value.niche),
+    city: value.city ?? '',
+    area: value.area ?? '',
+    address: value.address ?? '',
+    website: value.website ?? '',
+    phone: value.phone ?? '',
+    email: value.publicEmail,
+    googleRating: value.googleRating ?? 0,
+    googleReviews: value.googleReviews ?? 0,
+    yelpReviews: value.yelpReviews ?? 0,
+    websiteScore: value.scores?.website ?? 0,
+    seoOpportunity: value.scores?.seo ?? 0,
+    gbpOpportunity: value.scores?.googleBusiness ?? 0,
+    socialOpportunity: value.scores?.social ?? 0,
+    marketingNeed: value.scores?.marketingNeed ?? 0,
+    clientScore: value.scores?.clientScore ?? 0,
+    priority: value.priority ?? 'Low',
+    status: value.status ?? 'New Lead',
+    businessSize: value.estimatedBusinessSize ?? 'Unknown',
+    employees: value.estimatedEmployees ? String(value.estimatedEmployees) : 'Unknown',
+    years: value.yearsInBusiness ?? 0,
+    services: value.services ?? [],
+    recommendedService: value.recommendedServices?.[0] ?? '',
+    secondaryService: value.recommendedServices?.[1] ?? '',
+    mainOpportunity: value.mainOpportunity ?? 'Audit required',
+    nextAction: 'Review evidence',
+    tags: (value.tags ?? []).map((tag) => (typeof tag === 'string' ? tag : tag.name ?? '')).filter(Boolean),
+    observed: (value.sources ?? []).map((source) => source.url ?? '').filter(Boolean),
+    sourceCount: value.sources?.length ?? 0,
+    updatedAt: value.updatedAt ?? '',
+  };
+}
+
+export async function fetchBusinesses() {
+  const response = await apiRequest<{ data: ApiBusiness[] }>('/businesses?limit=100&sort=score');
+  return response.data.map(toBusinessRecord);
+}
+
+export async function fetchBusiness(id: string) {
+  return toBusinessRecord(await apiRequest<ApiBusiness>(`/businesses/${id}`));
+}
+
+export async function deleteBusiness(id: string) {
+  return apiRequest<void>(`/businesses/${id}`, { method: 'DELETE' });
+}
+
+export async function updatePipelineStatus(id: string, status: Stage) {
+  return apiRequest(`/pipeline/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
 }
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -61,10 +158,10 @@ interface ApiDashboard {
   pipeline: { stage: string; count: number }[];
   scoreDistribution: { _id: number | string; count: number }[];
   addedOverTime: { _id: string; leads: number }[];
+  topProspects: ApiBusiness[];
 }
 
 export async function fetchDashboard() {
-  if (demoMode) return dashboardData;
   const response = await apiRequest<ApiDashboard>('/dashboard');
   const countStages = (stages: string[]) =>
     response.pipeline
@@ -101,33 +198,11 @@ export async function fetchDashboard() {
       count: item.count,
     })),
     overTime: response.addedOverTime.map((item) => ({ month: item._id, leads: item.leads })),
+    businesses: response.topProspects.map(toBusinessRecord),
   };
 }
 
 export async function loginWithApi(email: string, password: string) {
-  if (demoMode) {
-    await new Promise((resolve) => setTimeout(resolve, 350));
-    const normalizedEmail = email.trim().toLowerCase();
-    if (normalizedEmail === 'admin@northstar.local' && password === 'Northstar123!') {
-      return {
-        token: `demo-${crypto.randomUUID()}`,
-        user: {
-          id: 'demo-admin',
-          name: 'Shafiq Rehman',
-          email: normalizedEmail,
-          role: 'admin',
-        },
-      } satisfies AuthSession;
-    }
-    const users = readDemoUsers();
-    const user = users.find((candidate) => candidate.email === normalizedEmail);
-    if (!user || user.passwordDigest !== (await digestPassword(password))) {
-      throw new Error('Invalid credentials');
-    }
-    const { passwordDigest: _passwordDigest, ...safeUser } = user;
-    void _passwordDigest;
-    return { token: `demo-${crypto.randomUUID()}`, user: safeUser } satisfies AuthSession;
-  }
   return apiRequest<AuthSession>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
@@ -135,28 +210,6 @@ export async function loginWithApi(email: string, password: string) {
 }
 
 export async function signupWithApi(name: string, email: string, password: string) {
-  if (demoMode) {
-    await new Promise((resolve) => setTimeout(resolve, 350));
-    const normalizedEmail = email.trim().toLowerCase();
-    const users = readDemoUsers();
-    if (
-      normalizedEmail === 'admin@northstar.local' ||
-      users.some((candidate) => candidate.email === normalizedEmail)
-    ) {
-      throw new Error('An account with this email already exists');
-    }
-    const user: DemoUser = {
-      id: crypto.randomUUID(),
-      name: name.trim(),
-      email: normalizedEmail,
-      role: 'researcher',
-      passwordDigest: await digestPassword(password),
-    };
-    window.localStorage.setItem(demoUsersKey, JSON.stringify([...users, user]));
-    const { passwordDigest: _passwordDigest, ...safeUser } = user;
-    void _passwordDigest;
-    return { token: `demo-${crypto.randomUUID()}`, user: safeUser } satisfies AuthSession;
-  }
   return apiRequest<AuthSession>('/auth/signup', {
     method: 'POST',
     body: JSON.stringify({ name, email, password }),
@@ -194,11 +247,6 @@ export async function runLiveResearch(input: {
   niche: string;
   limit: number;
 }) {
-  if (demoMode) {
-    throw new Error(
-      'Live search is disabled while NEXT_PUBLIC_DEMO_MODE is true. Connect the backend and disable demo mode first.',
-    );
-  }
   return apiRequest<LiveResearchResponse>('/research/live-search', {
     method: 'POST',
     body: JSON.stringify(input),
@@ -230,7 +278,6 @@ export interface ResearchJob {
 }
 
 export async function fetchResearchAutomation() {
-  if (demoMode) return { schedules: [], jobs: [] };
   const [schedules, jobs] = await Promise.all([
     apiRequest<{ data: ResearchSchedule[] }>('/research/schedules'),
     apiRequest<{ data: ResearchJob[] }>('/research/jobs'),
@@ -267,18 +314,4 @@ export async function deleteResearchSchedule(id: string) {
 export async function retryResearchJob(id: string) {
   return apiRequest<ResearchJob>(`/research/jobs/${id}/retry`, { method: 'POST' });
 }
-
-function readDemoUsers(): DemoUser[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    return JSON.parse(window.localStorage.getItem(demoUsersKey) ?? '[]') as DemoUser[];
-  } catch {
-    return [];
-  }
-}
-
-async function digestPassword(password: string) {
-  const bytes = new TextEncoder().encode(password);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
+import type { BusinessRecord, Stage } from './business-types';

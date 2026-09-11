@@ -13,7 +13,6 @@ import {
   YAxis,
 } from 'recharts';
 import {
-  ArrowUpRight,
   CheckCircle2,
   ChevronRight,
   CircleDollarSign,
@@ -29,7 +28,7 @@ import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { activities, businesses } from '@/lib/demo-data';
+import { activities } from '@/lib/business-types';
 import { fetchDashboard } from '@/lib/api';
 import { Avatar, Card, PriorityBadge, Progress, ScoreRing, SectionTitle } from './ui';
 import { useAuth } from './auth-provider';
@@ -39,8 +38,7 @@ const metricCards = [
     label: 'Total businesses',
     key: 'total',
     icon: UsersRound,
-    note: 'Across 5 industries',
-    trend: '+16 this month',
+    note: 'Owned by this account',
     tone: 'bg-emerald-50 text-brand',
   },
   {
@@ -48,7 +46,6 @@ const metricCards = [
     key: 'excellent',
     icon: Sparkles,
     note: 'Score 85 or higher',
-    trend: 'Top 19%',
     tone: 'bg-violet-50 text-violet-600',
   },
   {
@@ -56,7 +53,6 @@ const metricCards = [
     key: 'high',
     icon: Target,
     note: 'Ready for review',
-    trend: '+3 this week',
     tone: 'bg-blue-50 text-blue-600',
   },
   {
@@ -64,7 +60,6 @@ const metricCards = [
     key: 'average',
     icon: TrendingUp,
     note: 'Across all prospects',
-    trend: '+4.2 pts',
     tone: 'bg-amber-50 text-amber-600',
   },
 ] as const;
@@ -86,18 +81,21 @@ export function Dashboard() {
       </div>
     );
   }
+  const businesses = data.businesses;
+  const funnelBase = Math.max(data.metrics.contacted, 1);
   const funnelRows: Array<[string, number, number, LucideIcon, 'brand' | 'blue' | 'amber']> = [
-    ['Contacted', data.metrics.contacted, 100, MessageSquareText, 'brand'],
-    ['Replies received', data.metrics.replies, 68, CheckCircle2, 'blue'],
-    ['Qualified leads', data.metrics.qualified, 43, UserCheck, 'amber'],
-    ['Clients won', data.metrics.won, 18, CircleDollarSign, 'brand'],
+    ['Contacted', data.metrics.contacted, (data.metrics.contacted / funnelBase) * 100, MessageSquareText, 'brand'],
+    ['Replies received', data.metrics.replies, (data.metrics.replies / funnelBase) * 100, CheckCircle2, 'blue'],
+    ['Qualified leads', data.metrics.qualified, (data.metrics.qualified / funnelBase) * 100, UserCheck, 'amber'],
+    ['Clients won', data.metrics.won, (data.metrics.won / funnelBase) * 100, CircleDollarSign, 'brand'],
   ];
+  const today = new Intl.DateTimeFormat(undefined, { dateStyle: 'full' }).format(new Date());
   return (
     <>
       <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="text-xs font-bold uppercase tracking-[.16em] text-brand">
-            Sunday, September 6
+            {today}
           </p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-[28px]">
             Good morning, {user?.name.split(/\s+/)[0] ?? 'there'}
@@ -115,14 +113,11 @@ export function Dashboard() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {metricCards.map(({ label, key, icon: Icon, note, trend, tone }) => (
+        {metricCards.map(({ label, key, icon: Icon, note, tone }) => (
           <Card key={key} className="p-4">
             <div className="flex items-start justify-between">
               <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}>
                 <Icon size={18} />
-              </span>
-              <span className="flex items-center text-[10px] font-bold text-brand">
-                <ArrowUpRight size={12} /> {trend}
               </span>
             </div>
             <div className="mt-5 flex items-end justify-between">
@@ -330,7 +325,7 @@ export function Dashboard() {
                     <span className="font-bold">{item.count}</span>
                   </div>
                   <Progress
-                    value={(item.count / businesses.length) * 100}
+                    value={businesses.length ? (item.count / businesses.length) * 100 : 0}
                     tone={i === 0 ? 'brand' : i === 1 ? 'blue' : 'amber'}
                   />
                 </div>
@@ -351,14 +346,9 @@ export function Dashboard() {
                 </div>
               </div>
             ))}
+            <p className="text-[10px] text-slate-400">Activity appears after account actions are recorded.</p>
           </div>
         </Card>
-      </div>
-      <div className="mt-4 flex items-center gap-2 rounded-xl border border-dashed bg-white/60 px-4 py-3 text-[10px] text-slate-500">
-        <Sparkles size={13} className="text-brand" />
-        <strong className="text-slate-700">Demo dataset:</strong> all businesses and metrics shown
-        are illustrative. Replace them through Research or the API before using recommendations
-        operationally.
       </div>
     </>
   );

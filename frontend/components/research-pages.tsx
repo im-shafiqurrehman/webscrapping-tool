@@ -1,14 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   ArrowRight,
-  BarChart3,
   Check,
   CheckCircle2,
   ChevronDown,
-  CircleAlert,
   Clock3,
   CalendarClock,
   ExternalLink,
@@ -22,20 +21,19 @@ import {
   RefreshCw,
   ShieldCheck,
   SlidersHorizontal,
-  Sparkles,
   Upload,
   Trash2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { businesses, nicheRows, nicheSlug } from '@/lib/demo-data';
+import { nicheRows, nicheSlug } from '@/lib/business-types';
 import { Button, Card, PageHeader, ScoreRing, SectionTitle } from './ui';
 import { useMarkets } from './market-provider';
 import { useNotifications } from './notification-provider';
 import {
-  demoMode,
   createResearchSchedule,
   deleteResearchSchedule,
   fetchResearchAutomation,
+  fetchBusinesses,
   retryResearchJob,
   runLiveResearch,
   setResearchScheduleEnabled,
@@ -52,7 +50,7 @@ export function NichesPage() {
       n.name.toLowerCase().includes(query.toLowerCase()) &&
       (industry === 'All industries' || n.industry === industry),
   );
-  const best = nicheRows[0]!;
+  const best = nicheRows[0];
   return (
     <>
       <PageHeader
@@ -69,7 +67,7 @@ export function NichesPage() {
         }
       />
       <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr_1fr]">
-        <Card className="relative overflow-hidden bg-[#172A24] p-5 text-white">
+        {best ? <Card className="relative overflow-hidden bg-[#172A24] p-5 text-white">
           <div className="absolute -right-8 -top-8 h-40 w-40 rounded-full bg-[#45C69A]/10 blur-2xl" />
           <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#65D8B0]">
             Best current opportunity
@@ -96,19 +94,7 @@ export function NichesPage() {
               </div>
             ))}
           </div>
-        </Card>
-        <InsightCard
-          title="Primary service"
-          value="Local SEO"
-          subtitle="Highest weighted need across top prospects"
-          icon={<Sparkles />}
-        />
-        <InsightCard
-          title="Entry-level offer"
-          value="Local visibility audit"
-          subtitle="Low-friction, evidence-backed conversation starter"
-          icon={<BarChart3 />}
-        />
+        </Card> : <Card className="p-5 lg:col-span-3"><p className="text-sm font-bold">No researched niches yet</p><p className="mt-1 text-xs text-slate-500">Run a live search and review its sources to build this report.</p></Card>}
       </div>
       <Card className="mt-4 overflow-hidden">
         <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">
@@ -224,7 +210,7 @@ export function NichesPage() {
             title="Competitor gap analysis"
             subtitle="Weakness percentages only appear after the minimum sample is met"
           />
-          <div className="mt-5 rounded-xl border border-dashed bg-slate-50/50 p-6 text-center">
+          {best ? <div className="mt-5 rounded-xl border border-dashed bg-slate-50/50 p-6 text-center">
             <Layers3 className="mx-auto text-slate-300" />
             <p className="mt-3 text-sm font-bold">More records needed for gap percentages</p>
             <p className="mx-auto mt-1 max-w-md text-[11px] leading-5 text-slate-500">
@@ -238,7 +224,7 @@ export function NichesPage() {
             >
               Research {best.name} <ArrowRight size={13} />
             </Link>
-          </div>
+          </div> : <p className="mt-5 text-xs text-slate-500">No researched records are available yet.</p>}
         </Card>
         <Card className="p-5">
           <SectionTitle title="Score methodology" />
@@ -265,28 +251,6 @@ export function NichesPage() {
     </>
   );
 }
-function InsightCard({
-  title,
-  value,
-  subtitle,
-  icon,
-}: {
-  title: string;
-  value: string;
-  subtitle: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <Card className="p-5">
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-mint text-brand [&>svg]:h-4 [&>svg]:w-4">
-        {icon}
-      </span>
-      <p className="mt-5 text-[9px] font-bold uppercase tracking-wider text-slate-400">{title}</p>
-      <p className="mt-1 text-base font-bold">{value}</p>
-      <p className="mt-2 text-[10px] leading-4 text-slate-500">{subtitle}</p>
-    </Card>
-  );
-}
 function MiniBar({ value }: { value: number }) {
   return (
     <div className="flex items-center gap-2">
@@ -299,13 +263,15 @@ function MiniBar({ value }: { value: number }) {
 }
 
 export function AuditsPage() {
+  const { data: businesses = [] } = useQuery({ queryKey: ['businesses'], queryFn: fetchBusinesses });
   const [active, setActive] = useState('All audits');
+  const withEvidence = businesses.filter((business) => business.sourceCount > 0).length;
   const options = ['All audits', 'Website', 'SEO', 'Google Business', 'Social'];
   const auditStats: Array<[string, string | number, LucideIcon, string]> = [
     ['Waiting for audit', businesses.filter((b) => b.status === 'New Lead').length, Clock3, 'text-amber-600 bg-amber-50'],
-    ['Audited this month', businesses.length, CheckCircle2, 'text-brand bg-emerald-50'],
+    ['With stored evidence', withEvidence, CheckCircle2, 'text-brand bg-emerald-50'],
     ['High SEO opportunity', businesses.filter((b) => b.seoOpportunity >= 8).length, Search, 'text-blue-600 bg-blue-50'],
-    ['Evidence coverage', '87%', ShieldCheck, 'text-violet-600 bg-violet-50'],
+    ['Evidence coverage', `${businesses.length ? Math.round((withEvidence / businesses.length) * 100) : 0}%`, ShieldCheck, 'text-violet-600 bg-violet-50'],
   ];
   return (
     <>
@@ -352,7 +318,7 @@ export function AuditsPage() {
           </div>
         </div>
         <div className="divide-y">
-          {businesses.slice(0, 10).map((business, index) => (
+          {businesses.slice(0, 10).map((business) => (
             <Link
               href={`/businesses/${business.id}`}
               key={business.id}
@@ -372,9 +338,9 @@ export function AuditsPage() {
                 <p className="mt-1 text-[11px] font-semibold">{business.sourceCount} sources</p>
               </div>
               <span
-                className={`rounded-full px-2 py-1 text-[9px] font-bold ${index < 8 ? 'bg-emerald-50 text-brand' : 'bg-amber-50 text-amber-700'}`}
+                className={`rounded-full px-2 py-1 text-[9px] font-bold ${business.sourceCount > 0 ? 'bg-emerald-50 text-brand' : 'bg-amber-50 text-amber-700'}`}
               >
-                {index < 8 ? 'Complete' : 'Review due'}
+                {business.sourceCount > 0 ? 'Evidence stored' : 'Review due'}
               </span>
             </Link>
           ))}
@@ -614,15 +580,6 @@ export function ResearchPage() {
                       </Button>
                     </div>
                   </div>
-                  {demoMode && (
-                    <div className="mt-3 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[10px] leading-4 text-amber-800">
-                      <CircleAlert size={14} className="mt-0.5 shrink-0" />
-                      <span>
-                        Live search requires <code>NEXT_PUBLIC_DEMO_MODE=false</code>, a connected
-                        backend, MongoDB, and a server-side <code>XAI_API_KEY</code>.
-                      </span>
-                    </div>
-                  )}
                   {liveError && (
                     <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
                       {liveError}
@@ -731,24 +688,9 @@ export function ResearchPage() {
           <Card className="p-5">
             <SectionTitle title="Recent runs" />
             <div className="mt-4 space-y-3">
-              {[
-                [`${activeMarket.city} ${niche}`, 'Pending', '0 / 0'],
-                ['San Jose HVAC', 'Completed', '4 / 4'],
-                ['Dentists — Downtown', 'Running', '3 / 8'],
-                ['Home Services Q3', 'Pending', '0 / 20'],
-              ].map(([name, status, count]) => (
-                <div key={name} className="rounded-xl border p-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-bold">{name}</p>
-                    <span
-                      className={`text-[9px] font-bold ${status === 'Completed' ? 'text-brand' : status === 'Running' ? 'text-blue-600' : 'text-amber-600'}`}
-                    >
-                      {status}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-[9px] text-slate-400">{count} analyzed</p>
-                </div>
-              ))}
+              <p className="text-[10px] text-slate-400">
+                Saved schedules and actual job results appear in Daily automation.
+              </p>
             </div>
           </Card>
           <Card className="p-5">
@@ -758,12 +700,10 @@ export function ResearchPage() {
             <div className="mt-3 rounded-xl border border-dashed p-4 text-center">
               <Globe2 className="mx-auto text-slate-300" />
               <p className="mt-2 text-[11px] font-bold">
-                {demoMode ? 'Live provider not active' : 'Grok web search through backend'}
+                Groq Compound search through backend
               </p>
               <p className="mt-1 text-[10px] text-slate-400">
-                {demoMode
-                  ? 'Disable demo mode and configure XAI_API_KEY on the backend.'
-                  : 'Every candidate must include public citation URLs before review.'}
+                Every candidate must include public citation URLs before review.
               </p>
             </div>
           </Card>
@@ -794,7 +734,6 @@ function DailyAutomationPanel({
   const [error, setError] = useState<string | null>(null);
 
   const refresh = async () => {
-    if (demoMode) return;
     setError(null);
     try {
       const data = await fetchResearchAutomation();
@@ -806,7 +745,6 @@ function DailyAutomationPanel({
   };
 
   useEffect(() => {
-    if (demoMode) return;
     void fetchResearchAutomation()
       .then((data) => {
         setSchedules(data.schedules);
@@ -868,30 +806,25 @@ function DailyAutomationPanel({
         <button
           aria-label="Refresh automation status"
           onClick={() => void refresh()}
-          disabled={demoMode || busy}
+          disabled={busy}
           className="text-slate-400 hover:text-brand disabled:opacity-40"
         >
           <RefreshCw size={14} />
         </button>
       </div>
       <p className="mt-2 text-[10px] leading-4 text-slate-500">
-        Save this market and niche as a persistent daily Grok search. Times are UTC.
+        Save this market and niche as a persistent daily live-web search. Times are UTC.
       </p>
       <div className="mt-3 flex items-center gap-2">
         <div className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-[10px]">
           Runs daily at <strong>03:00 UTC</strong>
         </div>
-        <Button onClick={() => void save()} disabled={demoMode || busy}>
+        <Button onClick={() => void save()} disabled={busy}>
           <CalendarClock size={14} /> Schedule
         </Button>
       </div>
-      {demoMode && (
-        <p className="mt-3 rounded-lg bg-amber-50 p-2 text-[9px] leading-4 text-amber-800">
-          Daily jobs become available after demo mode is disabled and the backend cron variables are configured.
-        </p>
-      )}
       {error && <p role="alert" className="mt-3 text-[10px] text-red-600">{error}</p>}
-      {!demoMode && schedules.length === 0 && (
+      {schedules.length === 0 && (
         <p className="mt-4 text-[10px] text-slate-400">No daily searches configured.</p>
       )}
       <div className="mt-4 space-y-2">

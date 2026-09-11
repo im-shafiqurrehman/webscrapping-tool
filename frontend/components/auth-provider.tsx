@@ -4,7 +4,6 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
   authTokenKey,
   authUserKey,
-  demoMode,
   fetchCurrentUser,
   loginWithApi,
   signupWithApi,
@@ -58,11 +57,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const restore = async () => {
       const stored = readStoredSession();
       if (!stored) {
-        setReady(true);
-        return;
-      }
-      if (demoMode) {
-        setUser(stored.user);
         setReady(true);
         return;
       }
